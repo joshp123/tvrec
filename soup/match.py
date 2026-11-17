@@ -51,8 +51,12 @@ def run(con, year_fallback=False):
 def _run(con):
     con.execute("""
     create or replace table _cand_title as
+    with keys as (
+        select item_id, norm(title) as key from _item
+        union
+        select item_id, norm(clean_title(title)) from _item)
     select i.item_id, k.tconst, min(k.rank) as trank
-    from _item i join _title_key k on k.key in (norm(i.title), norm(clean_title(i.title)))
+    from keys i join _title_key k using (key)
     group by all
     """)
 
