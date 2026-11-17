@@ -1,0 +1,10 @@
+# Everything under data/ and private/ stays on this machine: downloaded data
+# sets, the built database, and all household data.
+/data/
+/private/
+*.sqlite
+*.sqlite-*
+.env
+.DS_Store
+__pycache__/
+.venv/
