@@ -1,9 +1,10 @@
 """Rating data sets, each with its items matched to IMDb IDs.
 
-Each loader stages three tables and calls `add`:
+Each loader stages three tables, in this order, and calls `add`:
   _item(item_id, title, year, kind, people)  the source's catalogue
-  _match(item_id, tconst, method)            items matched to IMDb (match.run)
   _r(user, item_id, rating, ts)              its ratings (ts in Unix seconds)
+  _match(item_id, tconst, method)            items matched to IMDb (match.run,
+                                             which reads _item and _r)
 """
 
 from . import match
@@ -92,6 +93,10 @@ def letterboxd(con):
            try_cast(regexp_extract(slug, '-(\\d{{4}})$', 1) as int), 'film', []::varchar[]
     from s where regexp_matches(slug, '-(19|20)\\d\\d$')
     """)
+    con.execute(f"""
+    create or replace table _r as
+    select "user" as user, movie_id::varchar as item_id, rating, null::bigint as ts from '{f}'
+    """)
     # Two readings of a slug ending in a year: a disambiguating suffix (tried
     # first, year required) or part of the title ("blade-runner-2049").
     con.execute("create or replace table _lb_item as select * from _item")
@@ -102,10 +107,6 @@ def letterboxd(con):
     match.run(con)
     con.execute("create or replace table _match as select * from _lb_match union all select * from _match")
     con.execute("create or replace table _item as select * from _lb_item qualify row_number() over (partition by item_id order by year nulls last) = 1")
-    con.execute(f"""
-    create or replace table _r as
-    select "user" as user, movie_id::varchar as item_id, rating, null::bigint as ts from '{f}'
-    """)
     add(con, "letterboxd")
 
 
@@ -187,7 +188,6 @@ def netflix(con):
            []::varchar[] as people
     from _nf_titles
     """)
-    match.run(con, year_fallback=True)
     con.execute(f"""
     create or replace table _r as
     select customer as user, regexp_extract(filename, 'mv_0*(\\d+)\\.txt', 1) as item_id,
@@ -195,6 +195,7 @@ def netflix(con):
     from read_csv('{d}/training_set/mv_*.txt', skip=1, header=false, filename=true,
                   columns={{'customer':'bigint','rating':'tinyint','date':'date'}})
     """)
+    match.run(con, year_fallback=True)
     add(con, "netflix")
 
 

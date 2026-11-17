@@ -14,10 +14,14 @@ directors and cast, possibly empty). Evidence for a candidate title:
 A candidate is accepted with a title match backed by one person or by year
 and kind, or without a title match when at least two people, and at least
 half of the item's names (up to six), are credited on it and year and kind
-agree. Candidates are ranked by people in common, title match, year and kind
-agreement, then closeness of year. When the top two are level on all of
-those, the most-voted title wins only with at least five times the votes of
-the next; otherwise the item stays unmatched. The result is
+agree. A season's year inside a series' run counts as agreeing. Without two
+people in common, a candidate is refused when the item has more than 20
+times as many ratings as the title has IMDb votes: thousands of raters point
+to a well-known title, not an obscure one of the same name. Candidates are
+ranked by people in common, title match, year and kind agreement, then IMDb
+votes. When the top two are level on all but votes, the most-voted wins only
+with at least five times the votes of the next; otherwise the item stays
+unmatched. The result is
 `_match(item_id, tconst, method)`.
 """
 
@@ -25,7 +29,7 @@ the next; otherwise the item stays unmatched. The result is
 # "Seinfeld: Seasons 1 & 2"): stripped before matching, marks a series.
 SEASON = (r"(?i)[\s:,\-–(]+(the\s+)?("
           r"(seasons?|series)\s*(\d+|one|two|three|four|five|six|seven|eight|nine|ten|[ivx]+)\b"
-          r"|(complete\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|final)\s+(seasons?|series)\b"
+          r"|(complete\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|final)\s+(seasons?|series|year)\b"
           r"|complete\s+(seasons?|series|collection)\b"
           r").*$")
 
@@ -34,20 +38,22 @@ PEOPLE_ROLES = "('director','creator','writer','actor')"
 
 def run(con, year_fallback=False):
     """Match `_item` into `_match`. With `year_fallback`, items left unmatched
-    are tried again ignoring their year, for sources whose year is a release
-    date of a DVD or streaming edition rather than of the title."""
-    _run(con)
+    are tried again allowing three years' difference, for sources whose year
+    is that of a DVD or streaming edition rather than of the title; that
+    second pass needs a title match."""
+    con.execute("create or replace table _item_n as select item_id, count(*) as n_ratings from _r group by 1")
+    _run(con, 1)
     if year_fallback:
         con.execute("create or replace table _match1 as select * from _match")
         con.execute("create or replace table _item1 as select * from _item")
-        con.execute("create or replace table _item as select * replace (null::int as year) from _item1 where item_id not in (select item_id from _match1)")
-        _run(con)
-        con.execute("create or replace table _match as select * from _match1 union all select item_id, tconst, method || ' (any year)' from _match")
+        con.execute("create or replace table _item as select * from _item1 where item_id not in (select item_id from _match1)")
+        _run(con, 3)
+        con.execute("create or replace table _match as select * from _match1 union all select item_id, tconst, method || ' (year within 3)' from _match")
         con.execute("create or replace table _item as select * from _item1")
         con.execute("drop table _match1; drop table _item1")
 
 
-def _run(con):
+def _run(con, years):
     con.execute("""
     create or replace table _cand_title as
     with keys as (
@@ -73,7 +79,7 @@ def _run(con):
     group by all
     """)
 
-    con.execute("""
+    con.execute(f"""
     create or replace table _cand as
     with c as (
         select coalesce(t.item_id, p.item_id) as item_id,
@@ -81,18 +87,19 @@ def _run(con):
                t.trank, coalesce(p.hits, 0) as hits, p.n_names
         from _cand_title t full join _cand_people p using (item_id, tconst)),
     f as (
-        select c.*, i.year, i.kind as want_kind, t.kind, t.is_series, t.start_year, t.end_year, t.imdb_votes,
-               i.year is null
-                 or abs(t.start_year - i.year) <= 1
-                 or (t.is_series and i.year between t.start_year and coalesce(t.end_year, 9999) + 1) as year_ok,
+        select c.*, i.year, t.imdb_votes, coalesce(n.n_ratings, 0) as n_ratings,
+               t.is_series and i.year between t.start_year and coalesce(t.end_year, 9999) + 1 as in_run,
+               i.year is null or abs(t.start_year - i.year) <= {years} or in_run as year_ok,
                i.kind is null
                  or (i.kind = 'series' and t.is_series)
-                 or (i.kind = 'film' and t.kind <> 'tvSeries') as kind_ok,
-               coalesce(abs(t.start_year - i.year), 99) as year_diff
-        from c join _item i using (item_id) join title t using (tconst))
+                 or (i.kind = 'film' and t.kind <> 'tvSeries') as kind_ok
+        from c join _item i using (item_id) join title t using (tconst) left join _item_n n using (item_id))
     select * from f
-    where (hits >= 2 and kind_ok and year_ok and hits >= least(n_names, 6) / 2)
-       or (trank is not null and (hits >= 1 or (year_ok and kind_ok)))
+    where ((hits >= 2 and kind_ok and year_ok and hits >= least(n_names, 6) / 2 and {years} = 1)
+           or (trank is not null and (hits >= 1 or (year_ok and kind_ok))))
+      -- Without two people in common, an item rated far more often than the
+      -- IMDb title has votes is a different, better-known title.
+      and (hits >= 2 or n_ratings <= 20 * greatest(imdb_votes, 1))
     """)
 
     con.execute("""
@@ -100,11 +107,11 @@ def _run(con):
     with ranked as (
         select *, row_number() over (partition by item_id order by
                      hits desc, trank asc nulls last, year_ok desc, kind_ok desc,
-                     year_diff asc, imdb_votes desc, tconst) as pos
+                     imdb_votes desc, tconst) as pos
         from _cand),
     top2 as (
         select a.*, b.hits as hits2, b.trank as trank2, b.year_ok as year_ok2,
-               b.kind_ok as kind_ok2, b.year_diff as year_diff2, b.imdb_votes as votes2
+               b.kind_ok as kind_ok2, b.imdb_votes as votes2
         from ranked a left join ranked b on b.item_id = a.item_id and b.pos = 2
         where a.pos = 1)
     select item_id, tconst,
@@ -116,8 +123,6 @@ def _run(con):
     from top2
     where hits2 is null
        or hits > hits2
-       or (coalesce(trank, 9), year_ok, kind_ok, year_diff)
-          <> (coalesce(trank2, 9), year_ok2, kind_ok2, year_diff2)
+       or (coalesce(trank, 9), year_ok, kind_ok) <> (coalesce(trank2, 9), year_ok2, kind_ok2)
        or imdb_votes >= 5 * greatest(votes2, 1)
     """)
-
