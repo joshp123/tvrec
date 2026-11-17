@@ -25,4 +25,4 @@ uv run python -m soup.build         # again, to load the fetched text
 ```
 
 The build reads only `data/raw/` and `private/`, takes about ten minutes and
-peaks at about 10 GB of memory.
+peaks at about 6 GB of memory. The result is about 16 GB.

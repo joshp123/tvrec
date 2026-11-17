@@ -6,6 +6,16 @@ One SQLite file. Every title is keyed by its IMDb ID (`tconst`, `tt…`), every
 person by IMDb name ID (`nconst`, `nm…`). Rebuild it with
 `uv run python -m soup.build`; it reads `data/raw/` and `private/` only.
 
+Lookups by `tconst`, `nconst` or `user_key` are indexed and fast in SQLite.
+For aggregates over `rating` (161 million rows), attach the file in DuckDB,
+which scans it in seconds where SQLite takes many minutes:
+
+```python
+import duckdb
+con = duckdb.connect()
+con.execute("install sqlite; load sqlite; attach 'data/soup.sqlite' as soup (type sqlite, read_only); use soup")
+```
+
 ## Titles and makers (IMDb)
 
 - `title`: every IMDb film, series, miniseries, TV film, special, video and

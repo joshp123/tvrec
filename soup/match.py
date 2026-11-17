@@ -14,12 +14,11 @@ directors and cast, possibly empty). Evidence for a candidate title:
 A candidate is accepted with a title match backed by one person or by year
 and kind, or without a title match when at least two people, and at least
 half of the item's names (up to six), are credited on it and year and kind
-agree. Candidates are ranked by
-people in common, title match, year and kind agreement, closeness of year,
-then films and series before shorts and videos. When the top two are level
-on all of those, the most-voted title wins only with at least five times the
-votes of the next; otherwise the item stays unmatched. The result is `_match(item_id,
-tconst, method)`.
+agree. Candidates are ranked by people in common, title match, year and kind
+agreement, then closeness of year. When the top two are level on all of
+those, the most-voted title wins only with at least five times the votes of
+the next; otherwise the item stays unmatched. The result is
+`_match(item_id, tconst, method)`.
 """
 
 # Season or volume wording at the end of a title ("The Wire: Season 1",
@@ -89,11 +88,7 @@ def _run(con):
                i.kind is null
                  or (i.kind = 'series' and t.is_series)
                  or (i.kind = 'film' and t.kind <> 'tvSeries') as kind_ok,
-               coalesce(abs(t.start_year - i.year), 99) as year_diff,
-               -- Among otherwise equal candidates, a feature film or a series
-               -- is likelier than a short, video or special of the same name.
-               case when t.kind in ('movie', 'tvSeries', 'tvMiniSeries') then 0
-                    when t.kind in ('tvMovie', 'tvSpecial') then 1 else 2 end as kind_rank
+               coalesce(abs(t.start_year - i.year), 99) as year_diff
         from c join _item i using (item_id) join title t using (tconst))
     select * from f
     where (hits >= 2 and kind_ok and year_ok and hits >= least(n_names, 6) / 2)
@@ -105,12 +100,11 @@ def _run(con):
     with ranked as (
         select *, row_number() over (partition by item_id order by
                      hits desc, trank asc nulls last, year_ok desc, kind_ok desc,
-                     year_diff asc, kind_rank asc, imdb_votes desc, tconst) as pos
+                     year_diff asc, imdb_votes desc, tconst) as pos
         from _cand),
     top2 as (
         select a.*, b.hits as hits2, b.trank as trank2, b.year_ok as year_ok2,
-               b.kind_ok as kind_ok2, b.year_diff as year_diff2, b.kind_rank as kind_rank2,
-               b.imdb_votes as votes2
+               b.kind_ok as kind_ok2, b.year_diff as year_diff2, b.imdb_votes as votes2
         from ranked a left join ranked b on b.item_id = a.item_id and b.pos = 2
         where a.pos = 1)
     select item_id, tconst,
@@ -122,8 +116,8 @@ def _run(con):
     from top2
     where hits2 is null
        or hits > hits2
-       or (coalesce(trank, 9), year_ok, kind_ok, year_diff, kind_rank)
-          <> (coalesce(trank2, 9), year_ok2, kind_ok2, year_diff2, kind_rank2)
+       or (coalesce(trank, 9), year_ok, kind_ok, year_diff)
+          <> (coalesce(trank2, 9), year_ok2, kind_ok2, year_diff2)
        or imdb_votes >= 5 * greatest(votes2, 1)
     """)
 
