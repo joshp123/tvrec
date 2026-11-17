@@ -1,5 +1,3 @@
-<!-- Written by AI on 2026.11.17 by model claude opus 5.5. -->
-
 # The soup: `data/soup.sqlite`
 
 One SQLite file. Every title is keyed by its IMDb ID (`tconst`, `tt…`), every

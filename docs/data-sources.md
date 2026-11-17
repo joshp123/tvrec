@@ -1,5 +1,3 @@
-<!-- Written by AI on 2026.11.17 by model claude opus 5.5. -->
-
 # Data sources
 
 Every source below is free to download with no account, sign-up, API key or

@@ -17,7 +17,7 @@ from .db import RAW, SOUP
 
 API = "https://en.wikipedia.org/w/api.php"
 OUT = RAW / "wikipedia" / "intros.jsonl"
-HEADERS = {"User-Agent": "tvrec/0.1 (personal film and TV research; https://github.com/joshp123/tvrec)"}
+HEADERS = {"User-Agent": "tvrec/0.1 (personal film and TV research)"}
 BATCH = 20  # the API's limit for lead-section extracts
 WORKERS = 5
 
