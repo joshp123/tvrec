@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#12100e">
+<title>Picks</title>
+<style>
+:root {
+  --bg: #12100e; --card: #1d1a17; --raise: #27231f; --line: #342e28;
+  --ink: #f2eadd; --muted: #a89c8b; --faint: #6f665a;
+  --amber: #f0a640; --want: #9ccc7e; --nope: #ec7a62;
+  --serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --top: env(safe-area-inset-top); --bottom: env(safe-area-inset-bottom);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--ink); overscroll-behavior: none; }
+body { font: 16px/1.45 var(--serif); -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.app { height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; padding-top: var(--top); }
+
+/* header */
+header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px 8px; }
+.label { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.people { display: flex; gap: 4px; }
+.people button { font: 600 13px/1 var(--sans); padding: 8px 12px; border-radius: 99px; color: var(--muted); border: 1px solid var(--line); text-transform: capitalize; }
+.people button[aria-pressed="true"] { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+
+main { position: relative; overflow: hidden; }
+.view { position: absolute; inset: 0; display: none; }
+.view.on { display: flex; flex-direction: column; }
+
+/* tabs */
+nav { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line); padding-bottom: var(--bottom); background: var(--bg); }
+nav button { padding: 11px 0 12px; font: 600 12px/1 var(--sans); color: var(--faint); }
+nav button[aria-selected="true"] { color: var(--ink); box-shadow: inset 0 2px 0 var(--amber); }
+nav .count { font: 500 11px var(--mono); color: var(--amber); margin-left: 3px; }
+
+/* deck */
+.deck { position: relative; flex: 1; margin: 0 12px; }
+.card { position: absolute; inset: 0; background: var(--card); border-radius: 14px; overflow: hidden; border: 1px solid var(--line);
+  will-change: transform; touch-action: pan-y; user-select: none; -webkit-user-select: none; transform-origin: 50% 90%; }
+.card.under { transform: scale(.96); filter: brightness(.6); pointer-events: none; transition: transform .25s, filter .25s; }
+.card .scroll { height: 100%; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+[hidden] { display: none !important; }
+.top { position: relative; padding: 16px 16px 14px; display: grid; grid-template-columns: 104px 1fr; gap: 14px; align-items: end; overflow: hidden; }
+.top .wash { position: absolute; inset: -40px; background: center / cover no-repeat; filter: blur(28px) saturate(1.2); opacity: .38; }
+.top .wash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 30%, var(--card) 92%); }
+.top > :not(.wash) { position: relative; }
+.top .thumb { width: 104px; aspect-ratio: 2/3; border-radius: 8px; background: var(--raise) center / cover; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.kicker { font: 600 10.5px/1.35 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--amber); }
+h2 { font: 700 27px/1.05 var(--serif); letter-spacing: -.01em; margin-top: 5px; text-wrap: balance; }
+.meta { font: 500 12px/1.45 var(--mono); color: var(--muted); margin-top: 6px; }
+.lead { font: 17px/1.4 var(--serif); color: var(--ink); }
+.body { padding: 0 16px 22px; }
+.scores { display: flex; gap: 18px; padding: 0 0 12px; border-bottom: 1px solid var(--line); }
+.score b { display: block; font: 700 20px/1 var(--serif); }
+.score span { font: 500 10px/1.6 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.sec { margin-top: 16px; }
+.sec h3 { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.sec p { color: #e2d9cb; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 13px/1 var(--sans); padding: 7px 10px; border-radius: 99px; background: var(--raise); color: var(--ink); }
+.chip.link { border: 1px solid var(--amber); background: none; color: var(--amber); }
+.note { margin-top: 18px; }
+.note textarea { width: 100%; min-height: 64px; resize: vertical; font: 16px/1.4 var(--serif); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; user-select: text; -webkit-user-select: text; }
+.note textarea:focus { outline: none; border-color: var(--amber); }
+.note small { display: block; font: 12px/1.4 var(--sans); color: var(--faint); margin-top: 4px; }
+.stamp { position: absolute; top: 22px; z-index: 3; font: 800 22px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase;
+  padding: 8px 12px; border: 3px solid; border-radius: 8px; opacity: 0; pointer-events: none; background: rgba(18,16,14,.55); }
+.stamp.r { left: 18px; transform: rotate(-12deg); }
+.stamp.l { right: 18px; transform: rotate(12deg); }
+
+/* action bar */
+.actions { padding: 10px 12px 10px; display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn { min-height: 48px; border-radius: 12px; font: 600 16px/1.1 var(--sans); display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--line); background: var(--card); }
+.btn.nope { color: var(--nope); border-color: rgba(236,122,98,.45); }
+.btn.want { color: var(--bg); background: var(--want); border-color: var(--want); }
+.btn.small { min-height: 40px; font-size: 14px; color: var(--muted); }
+.btn .arrow { font: 500 15px var(--mono); opacity: .8; }
+.row.three { grid-template-columns: 1fr 1fr 1fr; }
+.btn.loved { color: var(--want); } .btn.disliked { color: var(--nope); }
+
+/* toast */
+.toast { position: absolute; left: 12px; right: 12px; top: 6px; z-index: 10; display: flex; align-items: center; justify-content: space-between;
+  background: var(--ink); color: var(--bg); border-radius: 12px; padding: 6px 6px 6px 14px; font: 600 14px/1.3 var(--sans);
+  transform: translateY(-160%); transition: transform .25s; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+.toast.on { transform: none; }
+.toast button { font-weight: 700; padding: 10px 14px; border-radius: 9px; background: var(--bg); color: var(--ink); }
+
+/* lists */
+.list { flex: 1; overflow-y: auto; padding: 4px 16px 24px; overscroll-behavior: contain; }
+.intro { font: 15px/1.45 var(--serif); color: var(--muted); margin: 4px 0 14px; }
+.item { display: grid; grid-template-columns: 56px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; }
+.item .thumb { width: 56px; aspect-ratio: 2/3; border-radius: 6px; background: var(--raise) center / cover; }
+.item h4 { font: 700 18px/1.2 var(--serif); }
+.item .meta { margin-top: 2px; }
+.item q { display: block; font: italic 14px/1.4 var(--serif); color: var(--muted); margin-top: 4px; quotes: none; }
+.empty { margin: 40px 24px; text-align: center; color: var(--muted); }
+.empty h3 { font: 700 22px/1.2 var(--serif); color: var(--ink); margin-bottom: 8px; }
+
+/* taste map */
+.cluster { padding: 18px 0 20px; border-bottom: 1px solid var(--line); scroll-margin-top: 8px; }
+.cluster.flash { animation: flash 1.2s; }
+@keyframes flash { from { background: rgba(240,166,64,.14); } to { background: transparent; } }
+.cluster h3 { font: 700 24px/1.1 var(--serif); }
+.strength { display: flex; align-items: center; gap: 10px; margin: 8px 0 8px; }
+.strength i { flex: 0 0 120px; height: 4px; background: var(--raise); border-radius: 2px; overflow: hidden; }
+.strength i b { display: block; height: 100%; background: var(--amber); }
+.cluster p { color: #e2d9cb; font-size: 15px; }
+.strip { display: flex; gap: 10px; overflow-x: auto; margin: 10px -16px 0; padding: 0 16px 4px; scrollbar-width: none; }
+.strip::-webkit-scrollbar { display: none; }
+.tile { flex: 0 0 76px; text-align: left; }
+.tile .thumb { width: 76px; aspect-ratio: 2/3; border-radius: 6px; background: var(--raise) center / cover; }
+.tile span { display: block; font: 12px/1.25 var(--sans); color: var(--muted); margin-top: 5px; }
+.tile.new .thumb { outline: 2px solid var(--amber); outline-offset: -2px; }
+.cluster .sub { margin-top: 14px; }
+.flag { font: 12px/1.4 var(--sans); color: var(--bg); background: var(--amber); padding: 8px 10px; border-radius: 8px; margin: 2px 0 10px; }
+
+/* sheet */
+.sheet { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: none; }
+.sheet.on { display: block; }
+.sheet .panel { position: absolute; left: 0; right: 0; bottom: 0; top: calc(var(--top) + 36px); display: flex; flex-direction: column; background: var(--bg); border-radius: 16px 16px 0 0; overflow: hidden; }
+.sheet .bar { display: flex; justify-content: flex-end; padding: 8px 10px 0; }
+.sheet .bar button { font: 600 15px var(--sans); color: var(--amber); padding: 8px 10px; }
+.sheet .cardwrap { position: relative; flex: 1; margin: 6px 12px 0; }
+.sheet .actions { padding-bottom: calc(10px + var(--bottom)); }
+.sheet .card { touch-action: auto; }
+.sheet .now { font: 13px/1.3 var(--sans); color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="label" id="where">Picks</span>
+    <div class="people" id="people"></div>
+  </header>
+  <main>
+    <section class="view" id="v-picks">
+      <div class="deck" id="deck-picks"></div>
+      <div class="actions" id="act-picks">
+        <div class="row">
+          <button class="btn nope" data-a="not_for_me"><span class="arrow">←</span> Not for me</button>
+          <button class="btn want" data-a="want">Want <span class="arrow">→</span></button>
+        </div>
+        <div class="row">
+          <button class="btn small" data-a="seen">Seen it…</button>
+          <button class="btn small" data-a="dont_know">Don't know</button>
+        </div>
+      </div>
+      <div class="actions" id="act-seen-picks" hidden>
+        <div class="label" style="text-align:center">You've seen it. How was it?</div>
+        <div class="row three">
+          <button class="btn loved" data-a="seen_loved">Loved it</button>
+          <button class="btn" data-a="seen_fine">Fine</button>
+          <button class="btn disliked" data-a="seen_disliked">Disliked</button>
+        </div>
+        <button class="btn small" data-a="back">Back</button>
+      </div>
+    </section>
+    <section class="view" id="v-seen">
+      <div class="deck" id="deck-seen"></div>
+      <div class="actions" id="act-seen">
+        <div class="row">
+          <button class="btn nope" data-a="dont_know"><span class="arrow">←</span> Not seen</button>
+          <button class="btn want" data-a="seen_fine">Seen, fine <span class="arrow">→</span></button>
+        </div>
+        <div class="row">
+          <button class="btn small loved" data-a="seen_loved">Loved it</button>
+          <button class="btn small disliked" data-a="seen_disliked">Disliked it</button>
+        </div>
+      </div>
+    </section>
+    <section class="view" id="v-wanted"><div class="list" id="wanted"></div></section>
+    <section class="view" id="v-taste"><div class="list" id="taste"></div></section>
+    <div class="toast" id="toast"><span id="toast-text"></span><button id="undo">Undo</button></div>
+  </main>
+  <nav role="tablist">
+    <button role="tab" data-tab="picks">Picks</button>
+    <button role="tab" data-tab="seen">Seen it?</button>
+    <button role="tab" data-tab="wanted">Wanted<span class="count" id="wanted-count"></span></button>
+    <button role="tab" data-tab="taste">Taste</button>
+  </nav>
+</div>
+<div class="sheet" id="sheet"><div class="panel">
+  <div class="bar"><button id="sheet-close">Done</button></div>
+  <div class="cardwrap" id="sheet-card"></div>
+  <div class="actions" id="sheet-actions"></div>
+</div></div>
+
+<script>
+const SAID = {
+  want: "Want", not_for_me: "Not for me", seen_loved: "Seen: loved it", seen_fine: "Seen: fine",
+  seen_disliked: "Seen: disliked it", dont_know: "Don't know",
+};
+const SHORT = { "United States of America": "US", "United States": "US", "United Kingdom": "UK" };
+const SEEN_SAID = { ...SAID, dont_know: "Not seen" };
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const bg = url => url ? `style="background-image:url('${esc(url)}')"` : "";
+const small = url => url && url.replace("/t/p/w500/", "/t/p/w185/");
+
+let person, deck, answers = {}, notes = {}, tab = localStorage.tab || "picks", pending = null;
+
+/* ---------- data ---------- */
+async function load() {
+  const people = await (await fetch("/api/people")).json();
+  if (!people.length) { $("#deck-picks").innerHTML = `<div class="empty"><h3>No picks yet</h3>The engine has not written any cards.</div>`; return; }
+  person = people.includes(localStorage.person) ? localStorage.person : people[0];
+  $("#people").innerHTML = people.length > 1 ? people.map(p => `<button aria-pressed="${p === person}" data-p="${esc(p)}">${esc(p)}</button>`).join("") : "";
+  const r = await (await fetch("/api/deck/" + encodeURIComponent(person))).json();
+  deck = r.deck; answers = r.answers;
+  render();
+}
+const byId = id => deck.cards.find(c => c.imdb_id === id) || deck.seen_deck.find(c => c.imdb_id === id);
+const open = list => list.filter(c => !answers[c.imdb_id]);
+
+function commit() {
+  if (!pending) return;
+  const { item, answer } = pending; pending = null;
+  clearTimeout(commit.t); $("#toast").classList.remove("on");
+  const body = { person, imdb_id: item.imdb_id, answer, note: notes[item.imdb_id] || "" };
+  answers[item.imdb_id] = body;
+  fetch("/api/answer", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw r; })
+    .catch(() => { delete answers[item.imdb_id]; toast("Not saved: the server did not answer. It is back in the deck."); render(); });
+}
+function answer(item, a, said) {
+  commit();
+  pending = { item, answer: a };
+  answers[item.imdb_id] = { answer: a, pending: true };
+  toast(`${item.title} · ${said[a]}`, true);
+  commit.t = setTimeout(commit, 5000);
+  render();
+}
+function undo() {
+  if (!pending) return;
+  delete answers[pending.item.imdb_id]; pending = null;
+  clearTimeout(commit.t); $("#toast").classList.remove("on");
+  render();
+}
+function toast(text, canUndo) {
+  $("#toast-text").textContent = text; $("#undo").hidden = !canUndo;
+  $("#toast").classList.add("on");
+  if (!canUndo) setTimeout(() => $("#toast").classList.remove("on"), 4000);
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) commit(); });
+
+/* ---------- card ---------- */
+function years(c) {
+  if (c.kind !== "series") return c.year ?? "";
+  return c.end_year && c.end_year !== c.year ? `${c.year}–${c.end_year}` : c.end_year ? c.year : `${c.year}–`;
+}
+function meta(c) {
+  const len = c.kind === "series" ? (c.seasons ? `${c.seasons} season${c.seasons > 1 ? "s" : ""}` : "")
+    : (c.runtime_min ? `${c.runtime_min} min` : "");
+  return [c.kind === "series" ? "Series" : "Film", years(c), len, SHORT[c.country] || c.country].filter(Boolean).map(esc).join(" · ");
+}
+function cardHTML(c, full) {
+  const scores = [
+    c.imdb_rating && `<div class="score"><b>${c.imdb_rating.toFixed(1)}</b><span>IMDb${c.imdb_votes ? " · " + votes(c.imdb_votes) : ""}</span></div>`,
+    c.rt_critics != null && `<div class="score"><b>${c.rt_critics}%</b><span>RT critics</span></div>`,
+    c.rt_audience != null && `<div class="score"><b>${c.rt_audience}%</b><span>RT audience</span></div>`,
+  ].filter(Boolean).join("");
+  const kicker = [c.pick_kind, c.in_library && "In your library"].filter(Boolean).map(esc).join(" · ");
+  return `<div class="scroll">
+    <div class="top"><div class="wash" ${bg(c.poster)}></div>
+      <div class="thumb" ${bg(c.poster)}></div>
+      <div>${kicker ? `<div class="kicker">${kicker}</div>` : ""}
+      <h2>${esc(c.title)}</h2><div class="meta">${meta(c)}</div></div></div>
+    <div class="body">
+      ${scores ? `<div class="scores">${scores}</div>` : ""}
+      ${full && c.why ? `<div class="sec"><h3>Why you</h3><p class="lead">${esc(c.why)}</p></div>` : ""}
+      ${c.what ? `<div class="sec"><h3>What it is</h3><p>${esc(c.what)}</p></div>` : ""}
+      ${full && c.links?.length ? `<div class="sec"><h3>Linked to what you love</h3><div class="chips">${c.links.map(l => `<span class="chip">${esc(l)}</span>`).join("")}</div></div>` : ""}
+      ${full && c.cluster ? `<div class="sec"><h3>Where it sits in your taste</h3><div class="chips"><button class="chip link" data-cluster="${esc(c.cluster)}">${esc(c.cluster)} →</button></div></div>` : ""}
+      <label class="note"><div class="sec"><h3>Note, sent with your answer</h3></div>
+        <textarea data-note="${esc(c.imdb_id)}" placeholder="Optional. Tap the microphone on the keyboard to dictate.">${esc(notes[c.imdb_id] || "")}</textarea></label>
+    </div></div>
+    <div class="stamp r" style="color:var(--want)">${full ? "Want" : "Seen"}</div>
+    <div class="stamp l" style="color:var(--nope)">${full ? "Not for me" : "Not seen"}</div>`;
+}
+const votes = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "m votes" : n >= 1e3 ? Math.round(n / 1e3) + "k votes" : n + " votes";
+
+function renderDeck(el, items, full, emptyHTML) {
+  el.innerHTML = "";
+  const [top, next] = items;
+  if (!top) { el.innerHTML = emptyHTML; return null; }
+  if (next) { const u = document.createElement("article"); u.className = "card under"; u.innerHTML = cardHTML(next, full); el.append(u); }
+  const a = document.createElement("article"); a.className = "card"; a.innerHTML = cardHTML(top, full); el.append(a);
+  if (items[2]?.poster) new Image().src = items[2].poster;
+  return a;
+}
+
+/* ---------- swipe: the card follows the finger ---------- */
+function swipeable(card, under, onLeft, onRight) {
+  let x0, y0, dx = 0, axis = null, samples = [], id = null;
+  const W = () => card.offsetWidth;
+  const stampR = $(".stamp.r", card), stampL = $(".stamp.l", card);
+  const place = (x, t) => {
+    card.style.transition = t || "none";
+    card.style.transform = `translateX(${x}px) rotate(${x / 18}deg)`;
+    stampR.style.opacity = Math.max(0, Math.min(1, x / 90));
+    stampL.style.opacity = Math.max(0, Math.min(1, -x / 90));
+    if (under) { const p = Math.min(1, Math.abs(x) / (W() * .4)); under.style.transition = t ? "transform .3s, filter .3s" : "none";
+      under.style.transform = `scale(${.96 + .04 * p})`; under.style.filter = `brightness(${.6 + .4 * p})`; }
+  };
+  card.fling = (dir, v = 1.2) => {
+    const dist = W() * 1.4 * dir, ms = Math.max(180, Math.min(380, Math.abs(dist - dx) / v));
+    place(dist, `transform ${ms}ms cubic-bezier(.2,.7,.3,1)`);
+    setTimeout(() => (dir > 0 ? onRight : onLeft)(), ms - 40);
+  };
+  card.addEventListener("pointerdown", e => {
+    if (e.target.closest("textarea, button, a, input") || id !== null) return;
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; dx = 0; axis = null; samples = [[e.timeStamp, 0]];
+  });
+  card.addEventListener("pointermove", e => {
+    if (e.pointerId !== id) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!axis) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (axis === "x") card.setPointerCapture(id); else { id = null; return; }
+    }
+    dx = mx; samples.push([e.timeStamp, dx]); if (samples.length > 6) samples.shift();
+    place(dx);
+  });
+  const end = e => {
+    if (e.pointerId !== id) return; id = null;
+    if (axis !== "x") return;
+    const [t0, d0] = samples[0], [t1, d1] = samples[samples.length - 1];
+    const v = (d1 - d0) / Math.max(1, t1 - t0); // px per ms
+    const dir = Math.abs(dx) > W() * .3 ? Math.sign(dx) : Math.abs(v) > .45 && Math.sign(v) === Math.sign(dx) ? Math.sign(v) : 0;
+    if (e.type === "pointerup" && dir) card.fling(dir, Math.max(1.2, Math.abs(v)));
+    else { place(0, "transform .45s cubic-bezier(.2,1.5,.4,1)"); dx = 0; }
+  };
+  card.addEventListener("pointerup", end);
+  card.addEventListener("pointercancel", end);
+}
+
+/* ---------- views ---------- */
+function render() {
+  document.querySelectorAll("nav button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + tab));
+  $("#where").textContent = { picks: "Picks", seen: "Have you seen this?", wanted: "Your wanted list", taste: "Your taste map" }[tab];
+  if (!deck) return;
+  const wanted = Object.entries(answers).filter(([, a]) => a.answer === "want").map(([id]) => byId(id)).filter(Boolean);
+  $("#wanted-count").textContent = wanted.length || "";
+  ({ picks: renderPicks, seen: renderSeen, wanted: () => renderWanted(wanted), taste: renderTaste })[tab]();
+}
+
+function renderPicks() {
+  showSeenChoice(false);
+  const items = open(deck.cards);
+  const card = renderDeck($("#deck-picks"), items, true,
+    `<div class="empty"><h3>That's every pick for now</h3>Your wanted list keeps the ones you chose. New picks appear here when the engine writes them.</div>`);
+  $("#act-picks").style.visibility = card ? "" : "hidden";
+  if (card) swipeable(card, $(".card.under", $("#deck-picks")),
+    () => answer(items[0], "not_for_me", SAID), () => answer(items[0], "want", SAID));
+}
+function showSeenChoice(on) { $("#act-picks").hidden = on; $("#act-seen-picks").hidden = !on; }
+
+function renderSeen() {
+  const items = open(deck.seen_deck);
+  const card = renderDeck($("#deck-seen"), items, false,
+    `<div class="empty"><h3>Library done</h3>Every title in your library has an answer.</div>`);
+  $("#act-seen").style.visibility = card ? "" : "hidden";
+  if (card) swipeable(card, $(".card.under", $("#deck-seen")),
+    () => answer(items[0], "dont_know", SEEN_SAID), () => answer(items[0], "seen_fine", SEEN_SAID));
+}
+
+function itemHTML(c, attr) {
+  const n = answers[c.imdb_id]?.note || notes[c.imdb_id];
+  return `<button class="item" ${attr}><div class="thumb" ${bg(small(c.poster))}></div><div>
+    <h4>${esc(c.title)}</h4><div class="meta">${meta(c)}</div>${n ? `<q>${esc(n)}</q>` : ""}</div></button>`;
+}
+function renderWanted(wanted) {
+  $("#wanted").innerHTML = wanted.length
+    ? `<p class="intro">The ones you picked. Tap one to see it again, change your answer or add a note.</p>` + wanted.reverse().map(c => itemHTML(c, `data-open="${esc(c.imdb_id)}"`)).join("")
+    : `<div class="empty"><h3>Nothing picked yet</h3>Swipe right or tap Want on a pick, and it waits here.</div>`;
+}
+
+function tile(t, isNew) {
+  return `<button class="tile${isNew ? " new" : ""}" ${isNew ? `data-open="${esc(t.imdb_id)}"` : ""}><div class="thumb" ${bg(small(t.poster))}></div><span>${esc(t.title)}</span></button>`;
+}
+function renderTaste() {
+  const tm = deck.taste_map || { clusters: [] };
+  const word = s => s >= .85 ? "Core" : s >= .6 ? "Strong" : s >= .35 ? "Some" : "Faint";
+  const clusters = [...tm.clusters].sort((a, b) => (b.strength ?? 0) - (a.strength ?? 0));
+  $("#taste").innerHTML =
+    (deck.sample ? `<div class="flag">Placeholder: this map was made by hand from what you have said so far, not by the engine.</div>` : "") +
+    `<p class="intro">The kinds of thing you love, strongest first. Ringed posters are new picks in that corner; tap one to see its card.</p>` +
+    clusters.map(c => `<div class="cluster" id="cl-${esc(c.name)}">
+      <h3>${esc(c.name)}</h3>
+      <div class="strength"><i><b style="width:${Math.round((c.strength ?? 0) * 100)}%"></b></i><span class="label">${word(c.strength ?? 0)}</span></div>
+      <p>${esc(c.description)}</p>
+      <div class="strip">${c.examples.map(t => tile(t)).join("")}${(c.nearby || []).filter(t => !answers[t.imdb_id] || answers[t.imdb_id].answer === "want").map(t => tile(t, true)).join("")}</div>
+      ${c.neighbours?.length ? `<div class="sub"><div class="label" style="margin-bottom:8px">Next to it</div><div class="chips">${c.neighbours.map(n => `<button class="chip link" data-cluster="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>` : ""}
+    </div>`).join("") +
+    (tm.away_from?.length ? `<div class="cluster"><h3>Away from</h3><p>What you have said you dislike. Picks steer clear of these.</p><div class="strip">${tm.away_from.map(t => tile(t)).join("")}</div></div>` : "");
+}
+function toCluster(name) {
+  tab = "taste"; closeSheet(); render();
+  const el = document.getElementById("cl-" + name);
+  if (el) { el.scrollIntoView({ behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+}
+
+/* ---------- sheet: one card, any answer ---------- */
+function openSheet(id) {
+  const c = byId(id), a = answers[id]?.answer;
+  $("#sheet-card").innerHTML = `<article class="card">${cardHTML(c, !!c.why)}</article>`;
+  if (a && answers[id].note && !notes[id]) $("#sheet-card textarea").value = notes[id] = answers[id].note;
+  $("#sheet-actions").innerHTML = `${a ? `<div class="now">Your answer now: ${SAID[a]}</div>` : ""}
+    <div class="row three">
+      <button class="btn loved" data-s="seen_loved">Loved it</button><button class="btn" data-s="seen_fine">Fine</button><button class="btn disliked" data-s="seen_disliked">Disliked</button></div>
+    <div class="row">
+      <button class="btn small" data-s="not_for_me">Not for me</button>
+      <button class="btn small" data-s="${a === "want" ? "save_note" : "want"}">${a === "want" ? "Save note" : "Want"}</button></div>`;
+  $("#sheet").dataset.id = id;
+  $("#sheet").classList.add("on");
+}
+function closeSheet() { $("#sheet").classList.remove("on"); }
+$("#sheet-close").onclick = closeSheet;
+$("#sheet-actions").addEventListener("click", e => {
+  const b = e.target.closest("[data-s]"); if (!b) return;
+  const id = $("#sheet").dataset.id, c = byId(id);
+  const a = b.dataset.s === "save_note" ? "want" : b.dataset.s;
+  closeSheet(); commit();
+  answers[id] = { answer: a, pending: true }; pending = { item: c, answer: a }; commit();
+  toast(`${c.title} · ${SAID[a]}`); render();
+});
+
+/* ---------- wiring ---------- */
+document.addEventListener("input", e => { if (e.target.dataset.note) notes[e.target.dataset.note] = e.target.value; });
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-p],[data-cluster],[data-open]");
+  if (!t) return;
+  if (t.dataset.tab) { commit(); tab = localStorage.tab = t.dataset.tab; render(); if (tab === "taste") $("#taste").scrollTop = 0; }
+  else if (t.dataset.p) { commit(); localStorage.person = t.dataset.p; load(); }
+  else if (t.dataset.cluster) toCluster(t.dataset.cluster);
+  else if (t.dataset.open) openSheet(t.dataset.open);
+});
+function actions(view, said, onSeen) {
+  $(view).addEventListener("click", e => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const a = b.dataset.a, card = $(".deck .card:not(.under)", $(view).closest(".view"));
+    if (a === "seen") return showSeenChoice(true);
+    if (a === "back") return showSeenChoice(false);
+    if (!card) return;
+    const items = open(tab === "seen" ? deck.seen_deck : deck.cards);
+    if (a === said.right) return card.fling(1);
+    if (a === said.left) return card.fling(-1);
+    answer(items[0], a, tab === "seen" ? SEEN_SAID : SAID);
+  });
+}
+actions("#act-picks", { right: "want", left: "not_for_me" });
+actions("#act-seen-picks", {});
+actions("#act-seen", { right: "seen_fine", left: "dont_know" });
+$("#undo").onclick = undo;
+load();
+</script>
+</body>
+</html>
