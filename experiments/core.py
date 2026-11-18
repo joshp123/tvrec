@@ -31,7 +31,10 @@ def likes_table(exclude_users=None, exclude_items=None):
     return u[keep], t[keep]
 
 
-def like_matrix(u, t, min_likers=3):
+def like_matrix(u, t, min_likers=3, damp_heavy=False):
+    """People x titles. damp_heavy weights each person's likes by
+    1 / log2(2 + their number of likes), so people who like everything count
+    for less."""
     items, ti, counts = np.unique(t, return_inverse=True, return_counts=True)
     keep_item = counts >= min_likers
     m = keep_item[ti]
@@ -40,7 +43,11 @@ def like_matrix(u, t, min_likers=3):
     ti = remap[ti]
     items = items[keep_item]
     users, ui = np.unique(u, return_inverse=True)
-    L = sp.csr_matrix((np.ones(len(ui), np.float32), (ui, ti)), shape=(len(users), len(items)))
+    data = np.ones(len(ui), np.float32)
+    if damp_heavy:
+        per = np.bincount(ui)
+        data = (1 / np.log2(2 + per[ui])).astype(np.float32)
+    L = sp.csr_matrix((data, (ui, ti)), shape=(len(users), len(items)))
     return L, items
 
 

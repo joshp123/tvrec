@@ -7,7 +7,9 @@ no value is left out.
 ## Taste map
 
 `taste_map.clusters` are **shelves**, the map's top level (`shelves.py`): a
-handful per person, each grouping 20 to 40 fine clusters. Added per shelf:
+handful per person, each grouping 20 to 40 fine clusters. A shelf's `name`
+and `description` are written for this person, about their corner of the
+shelf (their titles on it), not about the shelf's bulk. Added per shelf:
 
 - `clusters`: names of up to five fine clusters on the shelf that the person's
   titles sit in, strongest first.
@@ -16,6 +18,9 @@ handful per person, each grouping 20 to 40 fine clusters. Added per shelf:
 
 - `episodes`, `hours`: total episodes and approximate viewing hours (series).
 - `status`: "running" or "ended YEAR", with the last episode's date when known.
+- `cluster`: the fine cluster's name where that names a real kind of thing;
+  where it does not (the cluster was judged incoherent, or its name is a
+  catch-all), the person's name for the shelf it sits on.
 - `pick_kind` ends in " (stretch)" for picks from a cluster next to the
   person's own rather than in it.
 - `why_not`: the strongest thing against it for this person; may be empty.
@@ -35,7 +40,9 @@ handful per person, each grouping 20 to 40 fine clusters. Added per shelf:
 - `evidence`: the data the text is written from, whoever writes it:
   `cluster`, `relation` (in their cluster, or a stretch next to which one),
   `links` (`{imdb_id, title, how: "shared audience" | "shared maker",
-  fans_who_also_loved_it?, fans?, maker?}`), `differs` (how it differs from
+  fans_who_also_loved_it?, fans?, maker?, maker_on_this?, maker_on_theirs?}`,
+  where the last two say what the maker did on each title, such as
+  "directed 6 episodes" or "created"), `differs` (how it differs from
   their own titles) and `against` (what counts against it).
 
 ## Seen deck

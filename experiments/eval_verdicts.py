@@ -137,7 +137,15 @@ def main(person):
     cases = []
     for t in hidden:
         q = without(p, t)
-        others = [f"- {F.title(u)}: {why[6:]}" + (f' ("{q.words[u]}")' if q.words.get(u) else "")
+        # Several verdicts can share one quote that names more than one title; words that
+        # are the hidden title's own, or that name it, would give its verdict away.
+        mine = p.words.get(t, "")
+        key = re.sub(r"^the ", "", household.norm(F.title(t))).replace(" ", "")
+        def clean(words):
+            if not words or words == mine or key in household.norm(words).replace(" ", ""):
+                return ""
+            return words
+        others = [f"- {F.title(u)}: {why[6:]}" + (f' ("{clean(q.words.get(u))}")' if clean(q.words.get(u)) else "")
                   for u, (w, why) in q.evidence.items() if why.startswith("said") and u in F.ti.index]
         cases.append({"t": t, "imdb_id": F.ti.tconst[t], "title": F.title(t), "votes": int(F.ti.imdb_votes[t] or 0),
                       "truth": truth[t], "words": p.words.get(t, ""), "others": "\n".join(others),
@@ -151,7 +159,8 @@ def main(person):
                   "Here is a title they have not been asked about, with facts about it. Would they love it, like it "
                   "or dislike it? Then write what a card on their phone would say: \"why\" it is for them (or why "
                   "they would not like it), tied to their own titles and words, and \"why_not\", the strongest thing "
-                  "against it for them. Use only the facts given and what you reliably know.\n\n"
+                  "against it for them. State no fact about the title or its people that is not in the facts "
+                  "given; do not add facts from memory.\n\n"
                   f"{json.dumps(case[variant], ensure_ascii=False)}\n\n"
                   'Reply with only JSON: {"verdict": "love"|"like"|"dislike", "why": "...", "why_not": "..."}')
         return case["imdb_id"], variant, claude(prompt)
@@ -186,9 +195,10 @@ def main(person):
         m = case.get("model_named", {})
         prompt = ("Below are facts handed to a writer, then what the writer wrote. List every factual claim the "
                   "writer makes about the title or its people (not opinions, not claims about the viewer's taste), "
-                  "and for each say whether the facts given support it.\n\n"
+                  "and for each say whether the facts given support it, and separately whether, to your knowledge, it "
+                  "is true.\n\n"
                   f"FACTS:\n{json.dumps(case['named'], ensure_ascii=False)}\n\nWRITTEN:\nwhy: {m.get('why')}\nwhy not: {m.get('why_not')}\n\n"
-                  'Reply with only JSON: {"claims": [{"claim": "...", "supported": true|false}]}')
+                  'Reply with only JSON: {"claims": [{"claim": "...", "supported": true|false, "true": true|false|null}]}')
         res = claude(prompt, "You are a careful fact-checker.") or {}
         return case["imdb_id"], res.get("claims", [])
 
@@ -216,8 +226,9 @@ def main(person):
             print(f"  {k:16} verdict exact {exact}/{len(cs)}, like-or-dislike right {side}/{len(cs)}, "
                   f"reason match {reasons.count('match')}, partly {reasons.count('partly')}, no {reasons.count('no')}")
     claims = [x for c in cases for x in c.get("claims", [])]
-    print(f"\nmodel (named) factual claims: {len(claims)}, unsupported by the facts given: "
-          f"{sum(not x.get('supported') for x in claims)}")
+    bad = [x for x in claims if not x.get("supported")]
+    print(f"\nmodel (named) factual claims: {len(claims)}, unsupported by the facts given: {len(bad)}, "
+          f"of which false or doubtful: {sum(x.get('true') is not True for x in bad)}")
 
 
 if __name__ == "__main__":

@@ -35,6 +35,7 @@ class Facts:
         cr = duckdb.sql(f"""select t, nconst, role, billing, episodes from '{W}/credits.parquet'
             where role in ('actor','creator','director','writer')""").df()
         self.cast = cr[(cr.role == "actor") & cr.billing.notna() & (cr.billing <= 5)]
+        self.crew = cr[cr.role != "actor"]
         self.mk = duckdb.sql(f"select t, nconst, share from '{W}/makers.parquet'").df()
         self.by_person = cr[cr.nconst.isin(set(self.cast.nconst) | set(self.mk.nconst))].groupby("nconst").t.apply(list)
         d = np.load(W / "nb_full.npz")
@@ -48,6 +49,22 @@ class Facts:
         r = self.ti.loc[t]
         return {"imdb_id": r.tconst, "title": r.title, "year": int(r.start_year) if r.start_year == r.start_year else None,
                 "kind": "series" if r.is_series else "film"}
+
+
+def role_on(F, nconst, t):
+    """What someone did on a title, in words: 'created', 'directed 6 episodes', 'wrote'."""
+    rows = F.crew[(F.crew.t == t) & (F.crew.nconst == nconst)]
+    series = bool(F.ti.is_series.get(t))
+    out = []
+    for role in ("creator", "director", "writer"):
+        r = rows[rows.role == role]
+        if r.empty:
+            continue
+        verb = {"creator": "created", "director": "directed", "writer": "wrote"}[role]
+        eps = r.episodes.iloc[0]
+        out.append(f"{verb} {int(eps)} episode{'s' if eps != 1 else ''}" if series and role != "creator" and eps == eps and eps
+                   else verb)
+    return ", ".join(out) or None
 
 
 def known_from(F, nconst, person, exclude):
@@ -134,8 +151,9 @@ def build(F, t, person, other, cluster_name, relation, link, against_sim, placed
                 c, n = int(F.cnt[js][hit[0]]), int(F.n[js])
         links.append({**F.ref(s), "how": "shared audience", "fans_who_also_loved_it": c, "fans": n})
     if "maker_from" in link:
-        links.append({**F.ref(link["maker_from"]), "how": "shared maker",
-                      "maker": F.people.get(link.get("maker_who"), link.get("maker_who"))})
+        who = link.get("maker_who")
+        links.append({**F.ref(link["maker_from"]), "how": "shared maker", "maker": F.people.get(who, who),
+                      "maker_on_this": role_on(F, who, t), "maker_on_theirs": role_on(F, who, link["maker_from"])})
     e["links"] = links
 
     # How it differs from what they already like.

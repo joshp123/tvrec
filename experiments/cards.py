@@ -30,6 +30,36 @@ PRIVATE = household.PRIVATE
 CACHE = PRIVATE / "card_text.json"
 MAP_CLUSTERS, EXAMPLES, NEARBY, DECK = 15, 6, 4, 40
 KIND_NAME = {"new": "New and good", "decent": "Decent", "niche": "Weird niche"}
+JUNK = re.compile(r"miscellan|leftover|filler|assorted|grab-bag|oddments|catalogue|low-rated|scattered", re.I)
+CORNERS = PRIVATE / "shelf_names.json"
+PROMPT_VERSION = 2  # change when the card prompt changes, so cached text is rewritten
+
+
+def name_corners(person, corners):
+    """Name each shelf for this person from their own titles on it, cached."""
+    cache = json.loads(CORNERS.read_text()) if CORNERS.exists() else {}
+    key = hashlib.sha1(json.dumps(corners, sort_keys=True).encode()).hexdigest()[:12]
+    if cache.get(person, {}).get("key") == key:
+        return cache[person]["names"]
+    prompt = ("Below are groups from a map of films and TV built from viewers' ratings. For each group you get the "
+              "titles one viewer liked that sit in it (with their own words where given) and the finer kinds of "
+              "title the group holds near them. Name the corner of the group that is this viewer's, as a friend "
+              "would describe that strand of their taste: 2 to 5 words, and one sentence saying what their titles "
+              "there have in common. Be specific and true to their titles; do not describe the rest of the group. "
+              "British English, no em dashes.\n\n" + json.dumps(corners, ensure_ascii=False) +
+              '\n\nReply with only JSON: {"<shelf>": {"name": "...", "description": "..."}, ...}')
+    res = subprocess.run(["claude", "-p", "--model", "opus", "--tools", "", "--strict-mcp-config", "--safe-mode",
+                          "--setting-sources", "", "--system-prompt", "You are a film and television expert.",
+                          "--no-session-persistence"], input=prompt, capture_output=True, text=True,
+                         timeout=900, cwd="/tmp").stdout
+    m = re.search(r"\{.*\}", res, re.S)
+    try:
+        names = json.loads(m.group(0)) if m else {}
+    except json.JSONDecodeError:
+        names = {}
+    cache[person] = {"key": key, "names": names}
+    CORNERS.write_text(json.dumps(cache, indent=1, ensure_ascii=False))
+    return names
 
 
 def poster(url):
@@ -56,7 +86,7 @@ def write_text(person, summary, items):
     cache = json.loads(CACHE.read_text()) if CACHE.exists() else {}
     out, todo = {}, []
     for it in items:
-        key = hashlib.sha1(json.dumps([summary, it], sort_keys=True).encode()).hexdigest()[:12]
+        key = hashlib.sha1(json.dumps([PROMPT_VERSION, summary, it], sort_keys=True).encode()).hexdigest()[:12]
         c = cache.get(f"{person}|{it['imdb_id']}")
         if c and c["key"] == key:
             out[it["imdb_id"]] = c
@@ -77,7 +107,8 @@ def write_text(person, summary, items):
             "of people from the evidence and it helps.\n"
             "\"why_not\": one sentence on the strongest thing against it, from the 'against' evidence; empty "
             "if there is nothing.\n"
-            "Use only the facts given and what you reliably know about the title.\n\n"
+            "State no fact about the title or its people that is not in the facts given (the premise, the "
+            "evidence, the makers and cast with what they are known from); do not add facts from memory.\n\n"
             "Reply with only a JSON list of objects with keys imdb_id, what, why, why_not.\n\n"
             + "\n\n".join(json.dumps(it, ensure_ascii=False) for _, it in batch))
         res = subprocess.run(["claude", "-p", "--model", "opus", "--tools", "", "--strict-mcp-config", "--safe-mode",
@@ -159,6 +190,29 @@ def main(person, other_name=None):
                          "clusters": [cname(c) for c in sorted(members, key=lambda c: -own[c])[:5]]})
     away = [tile(F, t) for t, (w, why) in said.items() if w < 0 and t in F.ti.index]
 
+    # A shelf's own name describes its bulk; on the taste screen it must say
+    # something true about this person's corner of it.
+    corners = [{"shelf": int(x), "their_titles": [f"{F.title(t)}" + (f' ({said[t][1][6:]}: "{p.words[t]}")' if t in said and p.words.get(t) else "")
+                                                  for t in ev_by_shelf.get(x, [])[:8]],
+                "kinds_it_holds": cl_names} for x, cl_names in zip(shelves_top, [c["clusters"] for c in clusters])]
+    named = name_corners(person, corners)
+    for c, x in zip(clusters, shelves_top):
+        if str(x) in named:
+            c["name"], c["description"] = named[str(x)]["name"], named[str(x)]["description"]
+    shelf_label = {x: named.get(str(x), {}).get("name") for x in shelves_top}
+
+    def label(c, t):
+        """The person's own name for the shelf, when the pick is on one of their
+        shelves; else the fine cluster's name, where the title was placed there by
+        its audience and the name names a real kind of thing; else the shelf's."""
+        x = int(shelf[c])
+        if shelf_label.get(x):
+            return shelf_label[x]
+        n = names.get(str(c), {})
+        if placed.get(t) == "likes" and n.get("coherent", True) and not JUNK.search(n.get("name", "")):
+            return n["name"]
+        return snames.get(str(x), {}).get("name", "")
+
     # Cards: evidence as data, then words.
     ts = [t for t, _, _ in chosen]
     ext = extras.fetch(ts, soup_links(ts))
@@ -185,6 +239,8 @@ def main(person, other_name=None):
                       "fuller_premise": premise, "evidence": e})
         built.append((t, kind, stretch, c, e))
     text = write_text(person, summary, items)
+    (PRIVATE / "cards").mkdir(exist_ok=True)
+    (PRIVATE / "cards" / f"{person}.facts.json").write_text(json.dumps(items, indent=1, ensure_ascii=False, default=str))
 
     cards = []
     for t, kind, stretch, c, e in built:
@@ -200,7 +256,7 @@ def main(person, other_name=None):
                 "runtime_min": e["format"].get("episode_minutes") or e["format"].get("minutes"),
                 "status": e.get("status"),
                 "country": pm.country if pm is not None and isinstance(pm.country, str) and pm.country else None,
-                "pick_kind": KIND_NAME[kind] + (" (stretch)" if stretch else ""), "cluster": cname(c),
+                "pick_kind": KIND_NAME[kind] + (" (stretch)" if stretch else ""), "cluster": label(c, t),
                 "what": tx.get("what") or plots.get(t, ""), "why": tx.get("why", ""), "why_not": tx.get("why_not", ""),
                 "links": list(dict.fromkeys([l["title"] for l in e["links"]] or e.get("your_titles_in_this_cluster", [])[:2])),
                 "imdb_rating": float(r.imdb_rating) if r.imdb_rating == r.imdb_rating else None,

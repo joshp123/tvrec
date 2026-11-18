@@ -3,7 +3,10 @@ they watched, as weighted taste evidence, and every title they already know.
 
 Reads only private/ at run time. Weights (1 = a loved title):
 - stated verdicts and page answers: loved 1, liked 0.6, seen and fine 0.3,
-  disliked -1, not for me -0.5; wanting a title counts 0.3 as interest;
+  disliked -1, slop -1 (a judgement on the show, which also counts against
+  shows like it), not for me -0.5 (a no without a reason); wanting a title
+  counts 0.3 as interest. "Not right now" is no judgement: it carries no
+  weight, and only holds the title back for NOT_NOW_DAYS;
 - a show watched to the end on Plex 0.5, dropped after one episode -0.3, a
   film played 0.2; plays are the household's, so a title one person said they
   dislike counts only for the other person;
@@ -19,6 +22,7 @@ import csv
 import json
 import re
 import time
+from datetime import datetime
 import unicodedata
 from dataclasses import dataclass, field
 
@@ -31,7 +35,9 @@ HALF_LIFE = 8.0
 LIB_SHOW, LIB_FILM = 0.05, 0.03  # hundreds of library titles must not outweigh a few stated verdicts
 NOW = 2026.9
 VERDICT = {"loved": 1.0, "liked": 0.6, "disliked": -1.0}
-ANSWER = {"seen_loved": 1.0, "seen_fine": 0.3, "seen_disliked": -1.0, "want": 0.3, "not_for_me": -0.5}
+ANSWER = {"seen_loved": 1.0, "seen_fine": 0.3, "seen_disliked": -1.0, "want": 0.3, "not_for_me": -0.5,
+          "slop": -1.0}
+NOT_NOW_DAYS = 42  # a "not right now" title may be offered again after this long
 
 
 @dataclass
@@ -157,6 +163,14 @@ def load(person, ti=None):
         for tc, a in latest.items():
             t = int(tc[2:])
             p.answered.add(t)
+            if a["answer"] == "not_now":
+                # No judgement on the title or its kind: it is only held back for a while.
+                age = time.time() - datetime.fromisoformat(a["ts"]).timestamp() if a.get("ts") else 0
+                if age < NOT_NOW_DAYS * 86400:
+                    p.known.add(t)
+                else:
+                    p.answered.discard(t)
+                continue
             if a["answer"] != "dont_know":
                 p.known.add(t)
             if a["answer"] in ANSWER:

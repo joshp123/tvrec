@@ -181,3 +181,49 @@ little each time it is made.
   average.
 - Level 3 improves the order of a short list in every case tried, strongly
   for unrated titles, with the caveat above.
+
+## 6. The taste map (`map.py`, `shelves.py`, `name_clusters.py`)
+
+One graph over the 129,245 films and series with 300 or more IMDb votes.
+Titles with 30 or more likers (36,205) link to their 20 strongest neighbours
+by other people's likes; every title also links to its 10 closest by shared
+makers plus plot words, at a quarter weight for titles with likes of their own.
+Leiden community detection, with clusters over 150 cut again, gives 4,002
+clusters (median 19 titles). Those join into 132 shelves by Leiden over the
+cluster-closeness graph. A frontier model names clusters and shelves from
+their members, for the ones in use.
+
+Likes alone grouped TV by data set and era (a 2000s DVD catalogue, one
+service's hits); content links at full weight let plot words override
+audiences (a shared word in two plots outweighed two quite different
+audiences). The quarter weight is the compromise.
+
+How well a title with no ratings can be placed: hiding the likes links of
+3,000 well-rated titles, makers and plot words alone put 0.49 in their own
+cluster and 0.54 in it or one of its 5 closest. A thinly rated title's shelf
+is more reliable than its exact cluster.
+
+## 7. Choosing stretch picks (`eval_stretch.py`)
+
+For 1,765 held-out people (296 long-tail), 20 likes revealed; their usual
+clusters are those 20 likes' clusters. Stretch likes are their other likes in
+any other cluster. Recall@50 over titles outside the usual clusters, with how
+well known the hits are:
+
+| method | recall, all | median likers of hits | little-rated share of hits | recall, long-tail | median likers | little-rated share |
+|---|---|---|---|---|---|---|
+| popularity | 0.182 | 116,688 | 0.000 | 0.056 | 134,380 | 0.000 |
+| map: closest clusters, best-rated first | 0.130 | 51,636 | 0.036 | 0.069 | 12,153 | 0.267 |
+| likes | 0.283 | 67,024 | 0.004 | 0.141 | 22,477 | 0.042 |
+| likes, popularity-corrected | 0.199 | 32,812 | 0.062 | 0.091 | 1,595 | 0.421 |
+| map + likes | 0.254 | 64,498 | 0.018 | 0.126 | 17,782 | 0.147 |
+| map + corrected likes | 0.206 | 41,666 | 0.046 | 0.095 | 6,899 | 0.351 |
+
+Choosing stretch by map closeness alone finds fewer stretch likes than other
+people's likes do, and adding it to likes lowers recall. So stretch picks are
+chosen by the strength of their link to the person's titles; the map decides
+what counts as outside their usual clusters, keeps the set varied and names
+what each pick is. Correcting for popularity costs recall but its hits are far
+less well known (for long-tail people, a median of 1,595 likers against
+22,477), which is the trade the picks want. The map was built from everyone's
+likes, test people included (7,700 of 5.7 million).

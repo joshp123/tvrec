@@ -9,7 +9,8 @@
    members), and linked to the person where possible (fans of their titles
    liked it more than its popularity predicts; it shares a maker with one of
    their titles). At most one pick per cluster and PER_SHELF per shelf, so
-   the set is varied.
+   the set is varied. Stretch picks are ordered by the strength of their link
+   to the person's titles, not by map closeness.
 4. Three kinds of pick: new and good (out since 2024 or still running with a
    recent season), decent (widely watched, but not a streaming homepage
    staple), weird niche (little known).
@@ -29,7 +30,10 @@ NICHE = 20_000
 PROBABLY_SEEN = 40_000        # on the person's own shelves, a title this well known is a question, not a pick
 MIN_RATING, MIN_VOTES = 7.2, 500
 OBVIOUS = 0.15
-STRETCH_LIKES = 0.008         # a stretch pick needs at least this pull from the person's titles, or a shared maker
+STRONG_QUANTILE = 0.9         # a strong link: in the top tenth of pulls from the person's titles, from two
+                              # or more titles they named, or a shared maker
+LINK_PEOPLE = 5               # people who liked both, at least, for a link to count
+FAMOUS_LIKERS = 5000          # likers in the rating data above which a title is widely seen
 TASTE_MIN = 0.15              # evidence this weak (library titles) marks a title as known, not as taste
 PER_SHELF = 3                 # at most this many picks from one shelf (shelves.py), for variety
 
@@ -79,14 +83,22 @@ def candidates(person, cl):
 def links(person, cand):
     """For each candidate: the person's titles it is linked to, and how strongly,
     by other people's likes (popularity-corrected) and by shared makers."""
-    d = np.load(W / "nb_full.npz")
+    # Heavy raters damped (build_people.py), then corrected for the candidate's
+    # own popularity; a link needs LINK_PEOPLE people behind it.
+    d = np.load(W / "nb_people.npz")
     items, idx, cnt, n = d["items"], d["idx"], d["cnt"], d["n"]
     pos = {t: i for i, t in enumerate(items)}
-    val = cnt / (np.sqrt(n)[:, None] * n[idx]) * (cnt / (cnt + SHRINK))
-    val[cnt < 2] = 0
+    val = d["val"] / np.sqrt(d["n_weighted"][idx])
+    val[cnt < LINK_PEOPLE] = 0
     pos_ev = [(t, w) for t, (w, why) in person.evidence.items() if w >= TASTE_MIN and t in pos]
     neg_ev = [t for t, (w, _) in person.evidence.items() if w < 0 and t in pos]
     cf, seed = score([pos[t] for t, _ in pos_ev], idx, val, len(items), "sum", [w for _, w in pos_ev])
+    # How many of the person's own named titles link to each title: one title's
+    # audience (often one data set's heavy users) is a thin reason on its own.
+    named = [pos[t] for t, (w, why) in person.evidence.items() if w > 0 and why.startswith("said") and t in pos]
+    n_from = np.zeros(len(items), int)
+    for j in named:
+        n_from[idx[j][val[j] > 0]] += 1
     dis, _ = score([pos[t] for t in neg_ev], idx, val, len(items), "max") if neg_ev else (np.zeros(len(items)), None)
     obvious = set()
     for t, w in pos_ev:
@@ -97,7 +109,9 @@ def links(person, cand):
     for t in cand.index:
         if t in pos and cf[pos[t]] > 0:
             out[t] = {"likes": float(cf[pos[t]]), "likes_from": int(pos_ev[seed[pos[t]]][0]),
-                      "dislike": float(dis[pos[t]])}
+                      "dislike": float(dis[pos[t]]), "named_links": int(n_from[pos[t]])}
+        if t in pos:
+            out.setdefault(t, {})["likers"] = int(n[pos[t]])
     mk = duckdb.sql(f"select t, nconst, share, w from '{W}/makers.parquet'").df()
     mine = {t: w for t, (w, _) in person.evidence.items() if w >= TASTE_MIN}
     fav = mk[mk.t.isin(mine.keys())]
@@ -133,8 +147,23 @@ def choose(person):
     shelf = np.load(W / "shelves.npy")
     s_own = np.bincount(shelf, weights=own, minlength=shelf.max() + 1)
     cand["own_shelf"] = s_own[shelf[c]] > 0.2 * s_own.max()
-    cand = cand[(cand.own > 0) | (cand.reach > 0)]
+    # Stretch stays within reach: on the person's own shelves, or on one of the
+    # three shelves closest to each of their four strongest. An audience link
+    # from far across the map (one data set's heavy users rating everything) is
+    # not a reason the person would recognise.
+    k = shelf.max() + 1
+    C1 = np.eye(k)[shelf]
+    Sh = C1.T @ S @ C1
+    np.fill_diagonal(Sh, 0)
+    mine = [int(x) for x in np.flatnonzero(s_own > 0.05 * s_own.max())]
+    near = set(mine) | {int(y) for x in np.argsort(-s_own)[:4] for y in np.argsort(-Sh[x])[:3]}
+    cand["within_reach"] = [int(x) in near for x in shelf[c]]
+    cand = cand[(cand.own > 0) | ((cand.reach > 0) & cand.within_reach)]
     cand = cand[~(cand.own_shelf & (cand.imdb_votes >= PROBABLY_SEEN))]
+    # Widely seen in any era (many likers in the rating data, which reaches back
+    # to the 1990s): a question for the "have you seen this?" deck, not a pick.
+    cand = cand[[lk.get(t, {}).get("likers", 0) < FAMOUS_LIKERS for t in cand.index]]
+    said_clusters = {cl[t] for t, (w, why) in person.evidence.items() if w > 0 and why.startswith("said") and t in cl}
     # Quality: IMDb rating shrunk towards 7 when few people voted, plus critics where known.
     v = cand.imdb_votes.values
     cand["quality"] = (cand.imdb_rating * v + 7.0 * 2000) / (v + 2000) + 0.5 * cand.rt_critics.fillna(cand.imdb_rating).values / 10
@@ -143,10 +172,15 @@ def choose(person):
     cand["obscurity"] = 1 - np.log1p(cand.imdb_votes) / np.log1p(np.maximum(top, 1000))
     likes = np.array([lk.get(t, {}).get("likes", 0) for t in cand.index])
     maker = np.array([lk.get(t, {}).get("maker", 0) for t in cand.index])
-    cand["strong_link"] = (likes >= STRETCH_LIKES) | (maker >= 0.1)
-    cand["link"] = (likes > 0) * 0.5 + (likes / (likes.max() or 1)) + np.minimum(maker, 1)
-    cand["value"] = cand.quality + 0.5 * cand.obscurity + cand.link
     cand["kind"] = [kind_of(r) for r in cand.itertuples()]
+    strong = np.quantile(likes[likes > 0], STRONG_QUANTILE) if (likes > 0).any() else 1
+    named_links = np.array([lk.get(t, {}).get("named_links", 0) for t in cand.index])
+    cand["strong_link"] = ((likes >= strong) & (named_links >= 2)) | (maker >= 0.1)
+    cand["link"] = np.minimum(likes / strong, 2) + np.minimum(maker, 1) * np.where(cand.kind == "new", 2, 1)
+    cand["value"] = cand.quality + 0.5 * cand.obscurity + cand.link
+    # Every pick needs a reason the person would recognise: a strong link to one
+    # of their titles, or a cluster that holds a title they named.
+    cand = cand[cand.strong_link | cand.cluster.isin(said_clusters)]
 
     picks, used, per_shelf = [], set(), {}
     for kind in ("new", "decent", "niche"):
@@ -158,8 +192,11 @@ def choose(person):
                 sub = part[(part.reach > 0) & part.strong_link] if stretch else part[part.own > 0]
                 # Best title per cluster, then clusters in order of how much they matter to the person.
                 sub = sub.sort_values("value", ascending=False).drop_duplicates("cluster")
-                weight = sub.reach if stretch else sub.own
-                sub = sub.assign(order=weight * sub.value).sort_values("order", ascending=False)
+                # Stretch picks go by the strength of the link, not by map closeness:
+                # on strangers, closeness alone found fewer liked titles outside a
+                # person's clusters than other people's likes did (eval_stretch.py).
+                order = (sub.link + 0.2 * sub.value) if stretch else (sub.own * sub.value)
+                sub = sub.assign(order=order).sort_values("order", ascending=False)
                 got = 0
                 for t, r in sub.iterrows():
                     sh = int(shelf[int(r.cluster)])
