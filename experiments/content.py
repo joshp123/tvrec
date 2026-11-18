@@ -27,6 +27,8 @@ def display_plots(limit=230):
 
 
 class Text:
+    """Plain word overlap (TF-IDF cosine) between plots."""
+
     def __init__(self):
         p = plots()
         self.ids = np.fromiter(p.keys(), np.int64)
@@ -34,37 +36,32 @@ class Text:
         self.X = TfidfVectorizer(stop_words="english", min_df=2, max_df=0.2, sublinear_tf=True,
                                  dtype=np.float32).fit_transform(p.values())
 
+    def block(self, a, b):
+        return (self.X[a] @ self.X[b].T).toarray()
+
     def sims(self, seeds):
-        """(titles x seeds) cosine of plot words."""
-        rows = [self.pos[s] for s in seeds]
-        return (self.X @ self.X[rows].T).toarray()
+        """(every title x seeds); a title is not similar to itself."""
+        S = (self.X @ self.X[[self.pos[s] for s in seeds]].T).toarray()
+        S[[self.pos[s] for s in seeds], np.arange(len(seeds))] = 0
+        return S
 
 
-def _best(ids, S, seeds, weights):
-    S = S * np.array([weights[s] for s in seeds])[None, :]
-    best = S.argmax(1)
-    v = S[np.arange(len(ids)), best]
-    keep = v > 0
-    return dict(zip(ids[keep], v[keep])), dict(zip(ids[keep], np.array(seeds)[best[keep]]))
+class Embeddings(Text):
+    """Cosine between plot embeddings from a frozen open model (embed.py)."""
 
+    def __init__(self):
+        self.ids, self.X = load_embeddings()
+        self.pos = {t: i for i, t in enumerate(self.ids)}
 
-def text_scores(seeds, weights):
-    tx = Text()
-    seeds = [s for s in seeds if s in tx.pos]
-    S = tx.sims(seeds)
-    S[[tx.pos[s] for s in seeds], :] = 0
-    return _best(tx.ids, S, seeds, weights)
+    def block(self, a, b):
+        return self.X[a] @ self.X[b].T
 
-
-def embedding_scores(seeds, weights):
-    ids, E = load_embeddings()
-    pos = {t: i for i, t in enumerate(ids)}
-    seeds = [s for s in seeds if s in pos]
-    S = E @ E[[pos[s] for s in seeds]].T
-    S[[pos[s] for s in seeds], :] = 0
-    return _best(ids, S, seeds, weights)
+    def sims(self, seeds):
+        S = self.X @ self.X[[self.pos[s] for s in seeds]].T
+        S[[self.pos[s] for s in seeds], np.arange(len(seeds))] = 0
+        return S
 
 
 def load_embeddings():
-    d = np.load(W / "emb.npz")
-    return d["ids"], d["E"]
+    """Title ids and their embeddings, memory-mapped (embed.py)."""
+    return np.load(W / "emb_ids.npy"), np.load(W / "emb.npy", mmap_mode="r")

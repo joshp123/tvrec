@@ -72,7 +72,7 @@ def incidence(ts, weighted):
     sub = mk[mk.t.isin(p)]
     return sp.csr_matrix(((sub.w.values if weighted else np.ones(len(sub))),
                           ([p[t] for t in sub.t], [mcode[m] for m in sub.nconst])), shape=(len(ts), len(mcode)))
-maker_S = np.minimum(1.0, (incidence(new, True) @ incidence(items, False).T).toarray()).astype(np.float32)
+maker_S = (incidence(new, True) @ incidence(items, True).T).toarray().astype(np.float32)
 
 
 def via_neighbours(near, cf):

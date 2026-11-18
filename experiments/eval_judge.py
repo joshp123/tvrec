@@ -9,13 +9,13 @@ before and after.
 import json
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 
 import duckdb
 import numpy as np
 import pandas as pd
 
-import eval_new as E
 from content import display_plots
 from core import W
 
@@ -34,6 +34,7 @@ def label(t):
 
 
 def ask(seeds, cands):
+    seeds = [t for t in seeds if t in ti.index]
     lines = [f"[{i}] {label(t)}, {'series' if ti.loc[t].is_series else 'film'}: {plot.get(t, '(no plot text)')}"
              for i, t in enumerate(cands)]
     prompt = ("A viewer rated these titles highly:\n" + "\n".join(label(t) for t in seeds) +
@@ -50,6 +51,7 @@ def ask(seeds, cands):
 
 
 def new_cases():
+    import eval_new as E
     sig_name = "level 2: level 1 + embedding" if E.emb_S is not None else "level 1: makers + words"
     out = []
     for u, liked_new, seeds in E.people():
@@ -59,6 +61,7 @@ def new_cases():
             hit = np.isin(pool, liked_new)
             if hit.any():
                 out.append(("new " + kind, u, [E.items[s] for s in seeds], [E.new[p] for p in pool], hit))
+    out = [c for c in out if all(t in ti.index for t in c[3])]
     return out, sig_name
 
 
@@ -78,20 +81,24 @@ def rated_cases():
         hit = np.isin(pool, np.setdiff1d(warm, seeds))
         if hit.any():
             out.append(("rated series, long-tail people", u, [R.items[s] for s in seeds], [R.items[p] for p in pool], hit))
+    out = [c for c in out if all(t in ti.index for t in c[3])]
     return out
 
 
-def main():
-    cases, sig_name = new_cases()
-    by = {}
-    for c in cases:
-        by.setdefault(c[0], []).append(c)
-    sample = []
-    for k, v in by.items():
-        sample += [v[i] for i in rng.choice(len(v), min(PER_CASE // 2, len(v)), replace=False)]
-    rated = rated_cases()
-    sample += [rated[i] for i in rng.choice(len(rated), min(PER_CASE, len(rated)), replace=False)]
-    print({k: len(v) for k, v in by.items()}, "rated", len(rated), "-> judging", len(sample), flush=True)
+def main(which):
+    sample, sig_name = [], "level 1 (sum)"
+    if which == "new":
+        cases, sig_name = new_cases()
+        by = {}
+        for c in cases:
+            by.setdefault(c[0], []).append(c)
+        for k, v in by.items():
+            sample += [v[i] for i in rng.choice(len(v), min(PER_CASE // 2, len(v)), replace=False)]
+        print({k: len(v) for k, v in by.items()}, flush=True)
+    else:
+        rated = rated_cases()
+        sample += [rated[i] for i in rng.choice(len(rated), min(PER_CASE, len(rated)), replace=False)]
+        print("rated", len(rated), flush=True)
 
     def run(c):
         order, parsed = ask(c[2], c[3])
@@ -100,8 +107,8 @@ def main():
     with ThreadPoolExecutor(4) as ex:
         res = list(ex.map(run, sample))
     df = pd.DataFrame(res, columns=["case", "u", "lower_hits", "judge_hits", "in_pool", "parsed"])
-    df.to_parquet(W / "eval_judge.parquet")
-    print(f"pool for new titles: {sig_name}; model: {MODEL}")
+    df.to_parquet(W / f"eval_judge_{which}.parquet")
+    print(f"pool from: {sig_name}; model: {MODEL}")
     print(df.groupby("case").agg(people=("u", "count"), hidden_likes_in_pool=("in_pool", "sum"),
                                  top10_lower=("lower_hits", "sum"), top10_judge=("judge_hits", "sum"),
                                  judge_better=("judge_hits", lambda s: (s > df.loc[s.index, "lower_hits"]).sum()),
@@ -110,4 +117,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1])
