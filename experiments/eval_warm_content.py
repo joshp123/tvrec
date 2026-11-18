@@ -68,8 +68,8 @@ for u, g in tl.groupby("u"):
         revealed[rev] = True
         hidden = liked & ~revealed
         cf = R.agg(rev, "sum")
-        maker = np.asarray((MW @ MB[rev].T).max(1).todense()).ravel()
-        words = np.asarray((TX @ TX[rev].T).max(1).todense()).ravel()
+        maker = (MW @ MB[rev].T.toarray()).max(1)
+        words = (TX @ TX[rev].T.toarray()).max(1)
         cf_lift = np.bincount(R.idx[rev].ravel(), LIFT[rev].ravel(), minlength=N)
         methods = {"likes only (sum)": cf,
                    "likes, popularity-corrected (sum)": cf_lift,

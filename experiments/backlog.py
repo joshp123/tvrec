@@ -3,9 +3,9 @@ pick: new and good, decent and widely watched, weird niche.
 
 Each kind is ranked by fusing the ranks of the evidence a level has:
 level 1: other people's likes, scored by how much more often fans of a
-favourite liked a title than its popularity predicts, and shared makers;
-level 2 adds plot embeddings close to a favourite; level 3 lets a frontier
-model reorder the top. Every reason names one of the person's favourites.
+favourite liked a title than its popularity predicts; for titles nobody has
+rated, shared makers. Level 2 adds, for unrated titles, plot embeddings close
+to a favourite; level 3 lets a frontier model reorder the top. Every reason names one of the person's favourites.
 
 Usage: python backlog.py PERSON LEVEL OUT.md
 Reads private/ (verdicts, titles seen elsewhere, watch list) and the soup's
@@ -31,6 +31,7 @@ W_LOVED, W_LIKED = 1.0, 0.6
 POP_EXP = 1.0      # candidate popularity exponent in the likes score; 0.5 is plain cosine
 OBVIOUS = 0.15     # a title liked by more than this share of a favourite's fans (of 200 or more) is one they have likely seen
 MIN_MAKER = 0.1    # weakest maker link that counts
+RATED = 20         # likers a title needs before other people's likes alone rank it
 DISLIKE_LABELS = ("slop",)
 
 
@@ -99,10 +100,11 @@ def evidence(person, level, holdout=()):
         for c, k in zip(idx[pos[t]], cnt[pos[t]]):
             if cf_seed[c] == s_i:
                 cf_n[items[c]] = int(k)
+    obvious = set()
     for t in seeds:
         j = pos[t]
-        obvious = idx[j][cnt[j] > OBVIOUS * n[j]] if n[j] >= 200 else []
-        cf[obvious] = 0
+        if n[j] >= 200:
+            obvious |= set(items[idx[j][cnt[j] > OBVIOUS * n[j]]])
     hit = np.flatnonzero(cf > 0)
     ev["likes"] = dict(zip(items[hit], cf[hit]))
     why["likes"] = {items[i]: (seeds[cf_seed[i]], f"{cf_n.get(items[i], 'several')} people who rated "
@@ -149,24 +151,38 @@ def evidence(person, level, holdout=()):
                 ev["plot"][t] = row[b]
                 why["plot"][t] = (fav[b], f"its plot is close to {ti.title.get(fav[b])}")
 
+    likers = dict(zip(items, n))
+    cand["likers"] = [likers.get(t, 0) for t in cand.index]
     for k, v in ev.items():
         cand[k] = [v.get(t, 0.0) for t in cand.index]
-    cand = cand[~cand.index.isin(too_close_to_dislike)]
+    cand = cand[~cand.index.isin(too_close_to_dislike | obvious)]
     return cand, list(ev), why, rows, watch, unresolved
 
 
 def fuse(df, kinds):
-    """Reciprocal-rank fusion within one kind of pick; zero evidence adds nothing."""
-    total = np.zeros(len(df))
-    best = np.full(len(df), "", object)
-    best_r = np.full(len(df), np.inf)
-    for k in kinds:
-        v = df[k].values
+    """Titles other people have rated (RATED or more likers) are ranked by their likes alone, which
+    beat every mix with makers or plot text in the tests on strangers. Titles
+    with no likes evidence are ranked by makers (and plot, at level 2), fused
+    by reciprocal rank. The two lists are interleaved rank for rank."""
+    def rank(v):
         r = pd.Series(-v).rank(method="min").to_numpy(copy=True)
         r[v <= 0] = np.inf
-        total += np.where(np.isfinite(r), 1 / (60 + r), 0)
+        return r
+
+    likes = df["likes"].values
+    rated = df["likers"].values >= RATED
+    total = np.where(rated, 1 / (60 + rank(likes)), 0.0)
+    best = np.where(rated, "likes", "").astype(object)
+    rest = [k for k in kinds if k != "likes"]
+    content = np.zeros(len(df))
+    best_r = np.full(len(df), np.inf)
+    for k in rest:
+        v = np.where(rated, 0, df[k].values)
+        r = rank(v)
+        content += np.where(np.isfinite(r), 1 / (60 + r), 0)
         better = r < best_r
-        best[better], best_r[better] = k, r[better]
+        best[better & ~rated], best_r[better & ~rated] = k, r[better & ~rated]
+    total = np.where(rated, total, 1 / (60 + rank(content)) * (content > 0))
     return total, best
 
 
