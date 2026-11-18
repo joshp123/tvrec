@@ -29,4 +29,4 @@ dump("credits", """
     from soup.credit where role in ('creator','writer','director','producer','actor','composer','cinematographer','editor')""")
 dump("people", "select nconst, name from soup.person")
 dump("scores", "select cast(substr(tconst, 3) as int) as t, scorer, score, votes from soup.public_score")
-dump("facts", "select cast(substr(tconst, 3) as int) as t, fact, value, value_id from soup.title_fact where fact in ('country','creator','showrunner','genre')")
+dump("facts", "select cast(substr(tconst, 3) as int) as t, fact, value, value_id from soup.title_fact where fact in ('country','creator','showrunner','genre','award','nomination','based_on','broadcaster')")

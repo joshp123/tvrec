@@ -28,5 +28,18 @@ con.execute(f"""copy (
                 when r->>'$.image' like 'imdb://%' then 'imdb' else 'tmdb' end scorer,
            max((r->>'$.value')::double) score
     from r group by all) to '{W}/plex_scores.parquet' (format parquet)""")
+con.execute(f"""copy (
+    select cast(substr(tconst, 3) as int) t, m->>'$.thumb' poster, m->>'$.art' art,
+           (m->>'$.childCount')::int seasons, ((m->>'$.duration')::bigint / 60000)::int runtime_min,
+           array_to_string(json_extract_string(m, '$.Country[*].tag'), ', ') country,
+           array_to_string(json_extract_string(m, '$.Network[*].tag'), ', ') network,
+           m->>'$.originallyAvailableAt' first_aired, m->>'$.lastEpisodeOriginallyAvailableAt' last_aired
+    from plex) to '{W}/plex_meta.parquet' (format parquet)""")
+con.execute(f"""copy (
+    select cast(substr(e.parentTconst, 3) as int) t, try_cast(e.seasonNumber as int) season,
+           try_cast(e.episodeNumber as int) episode, r.averageRating::float rating, r.numVotes::int votes
+    from read_csv('{RAW}/imdb/title.episode.tsv.gz', delim='\t', header=true, quote='', all_varchar=true) e
+    join read_csv('{RAW}/imdb/title.ratings.tsv.gz', delim='\t', header=true, quote='', all_varchar=true) r
+      on r.tconst = e.tconst) to '{W}/episodes.parquet' (format parquet)""")
 print(con.sql(f"select src, count(*) from '{W}/plot.parquet' group by 1"))
 print(con.sql(f"select scorer, count(*) from '{W}/plex_scores.parquet' group by 1"))
