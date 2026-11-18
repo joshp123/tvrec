@@ -416,6 +416,7 @@ function openSheet(id) {
   $("#sheet-card").innerHTML = `<article class="card">${cardHTML(c, !!c.why)}</article>`;
   if (a && answers[id].note && !notes[id]) $("#sheet-card textarea").value = notes[id] = answers[id].note;
   $("#sheet-actions").innerHTML = `${a ? `<div class="now">Your answer now: ${SAID[a]}</div>` : ""}
+    <div class="label" style="text-align:center">Seen it? How was it?</div>
     <div class="row three">
       <button class="btn loved" data-s="seen_loved">Loved it</button><button class="btn" data-s="seen_fine">Fine</button><button class="btn disliked" data-s="seen_disliked">Disliked</button></div>
     <div class="row">
