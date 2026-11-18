@@ -135,25 +135,35 @@ def write_text(person, summary, items):
     return out
 
 
-def main(person, other_name=None):
+def main(person, other_name=None, given=None, shown=()):
+    """given: picks chosen elsewhere (picker.py), as dicts {t, kind, source, why};
+    without it, the ranker's own picks. shown: titles never to offer again."""
     p = household.load(person)
+    p.known |= set(shown)
     other = household.load(other_name) if other_name else None
     chosen, cand, lk, own, reach, against, cl, S = P.choose(p)
+    meta = {}
+    if given is not None:
+        chosen = [(g["t"], g["kind"], False) for g in given]
+        meta = {g["t"]: g for g in given}
+        missing = [t for t, _, _ in chosen if t not in lk]
+        if missing:
+            lk.update(P.links(p, P.pd.DataFrame(index=missing))[0])
     F = EV.Facts()
     placed = dict(zip(*[P.duckdb.sql(f"select t, placed_by from '{W}/map.parquet'").df()[c] for c in ("t", "placed_by")]))
 
     top = [int(c) for c in np.argsort(-own)[:MAP_CLUSTERS] if own[c] > 0]
     neighbours = {c: [int(x) for x in np.argsort(-S[c])[:3]] for c in top}
-    pick_clusters = {int(cand.loc[t, "cluster"]) for t, _, _ in chosen}
+    pick_clusters = {int(cl[t]) for t, _, _ in chosen if t in cl}
     stretch_from = {}
     for t, kind, stretch in chosen:
-        c = int(cand.loc[t, "cluster"])
+        c = int(cl.get(t, -1))
         if stretch:
             stretch_from[t] = max(top, key=lambda x: S[c, x]) if top else c
     want = set(top) | {x for v in neighbours.values() for x in v} | pick_clusters | set(stretch_from.values())
     name_clusters.main(sorted(want))
     names = json.loads(name_clusters.OUT.read_text())
-    cname = lambda c: names.get(str(c), {}).get("name", f"cluster {c}")
+    cname = lambda c: names.get(str(c), {}).get("name", "") if c >= 0 else ""
     cdesc = lambda c: names.get(str(c), {}).get("description", "")
 
     said = {t: v for t, v in p.evidence.items() if v[1].startswith("said")}
@@ -205,6 +215,8 @@ def main(person, other_name=None):
         """The person's own name for the shelf, when the pick is on one of their
         shelves; else the fine cluster's name, where the title was placed there by
         its audience and the name names a real kind of thing; else the shelf's."""
+        if c < 0:
+            return ""
         x = int(shelf[c])
         if shelf_label.get(x):
             return shelf_label[x]
@@ -220,18 +232,22 @@ def main(person, other_name=None):
     dislikes = [u for u, (w, _) in p.evidence.items() if w < 0 and u in F.pos]
     items, built = [], []
     for t, kind, stretch in chosen:
-        c = int(cand.loc[t, "cluster"])
-        rel = (f"stretch: next to their cluster '{cname(stretch_from[t])}'" if stretch else f"in their cluster '{cname(c)}'")
+        c = int(cl.get(t, -1))
+        rel = (f"stretch: next to their cluster '{cname(stretch_from[t])}'" if stretch else
+               f"in their cluster '{cname(c)}'" if c >= 0 and own[c] > 0 else f"on the map in '{cname(c)}'" if c >= 0 else "")
         worst = None
         if t in F.pos and dislikes:
             sims = [(F.val[F.pos[u]][F.idx[F.pos[u]] == F.pos[t]], u) for u in dislikes]
             sims = [(float(s[0]), u) for s, u in sims if len(s) and s[0] > 0.02]
             worst = F.title(max(sims)[1]) if sims else None
-        e = EV.build(F, t, p, other, f"{cname(c)}: {cdesc(c)}", rel, lk.get(t, {}), worst, placed.get(t, "likes"))
+        e = EV.build(F, t, p, other, f"{cname(c)}: {cdesc(c)}" if c >= 0 else "", rel, lk.get(t, {}), worst,
+                     placed.get(t, "unplaced"))
         if not stretch:
             e["your_titles_in_this_cluster"] = [F.title(x) for x in ev_by_cluster.get(c, []) if x in said][:4]
         else:
             e["your_titles_in_the_neighbouring_cluster"] = [F.title(x) for x in ev_by_cluster.get(stretch_from[t], []) if x in said][:4]
+        if t in meta:
+            e["chosen_because"] = meta[t].get("why")
         r = F.ti.loc[t]
         premise = ext.get(t, {}).get("premise")
         items.append({"imdb_id": r.tconst, "title": r.title, "year": int(r.start_year),
@@ -257,6 +273,7 @@ def main(person, other_name=None):
                 "status": e.get("status"),
                 "country": pm.country if pm is not None and isinstance(pm.country, str) and pm.country else None,
                 "pick_kind": KIND_NAME[kind] + (" (stretch)" if stretch else ""), "cluster": label(c, t),
+                "source": meta.get(t, {}).get("source", "ranker"),
                 "what": tx.get("what") or plots.get(t, ""), "why": tx.get("why", ""), "why_not": tx.get("why_not", ""),
                 "links": list(dict.fromkeys([l["title"] for l in e["links"]] or e.get("your_titles_in_this_cluster", [])[:2])),
                 "imdb_rating": float(r.imdb_rating) if r.imdb_rating == r.imdb_rating else None,
