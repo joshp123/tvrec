@@ -4,7 +4,8 @@
 
 Reads <private>/cards/<person>.json on every request and appends each answer
 to <private>/swipes.jsonl. <private> is ./private unless TVREC_PRIVATE says
-otherwise; the port is 8788 unless TVREC_PORT says otherwise.
+otherwise; the port is 8788 unless TVREC_PORT says otherwise. It listens on
+this machine only unless TVREC_HOST names another address to listen on.
 """
 import json
 import os
@@ -79,4 +80,4 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("TVREC_PORT", 8788))
-    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    ThreadingHTTPServer((os.environ.get("TVREC_HOST", "127.0.0.1"), port), Handler).serve_forever()

@@ -4,7 +4,8 @@ A phone page that shows one pick at a time as a card and records each answer.
 
     python3 app/server.py
 
-It listens on all interfaces, port 8788 (`TVREC_PORT`), and reads and writes
+It listens on this machine only (`TVREC_HOST` names another address, such as
+the one on a private network), port 8788 (`TVREC_PORT`), and reads and writes
 under `private/` (`TVREC_PRIVATE`). Open it from a phone over the tailnet.
 
 ## What it reads: `private/cards/<person>.json`
