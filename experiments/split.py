@@ -5,6 +5,8 @@ Test people: up to N per data set with at least 30 likes, plus people with at
 least 10 liked series. New titles: a sample of series and films that test
 people liked and that have plot text; every rating of them is removed, as if
 they had just come out."""
+import sys
+
 import duckdb
 import numpy as np
 
@@ -22,21 +24,25 @@ con.execute(f"""create table likes as
     where r >= 0.75 and r >= um""")
 per_user = con.execute("select u, any_value(source) src, count(*) n, sum(s) ns from likes group by u").fetchnumpy()
 
+REUSE = sys.argv[1] if len(sys.argv) > 1 else None  # an earlier nb_eval.npz: keep its people and new titles
 test = []
-for src, n in PER_SOURCE.items():
+for src, n in ([] if REUSE else PER_SOURCE.items()):
     pool = per_user["u"][(per_user["src"] == src) & (per_user["n"] >= 30)]
     test.append(rng.choice(pool, min(n, len(pool)), replace=False))
     print(src, "eligible", len(pool), "taken", len(test[-1]))
-pool = np.setdiff1d(per_user["u"][per_user["ns"] >= 10], np.concatenate(test))
-test.append(rng.choice(pool, min(SERIES_USERS, len(pool)), replace=False))
-print("series-rich eligible", len(pool), "taken", len(test[-1]))
-test = np.unique(np.concatenate(test))
+if REUSE:
+    test = np.load(REUSE)["test"]
+else:
+    pool = np.setdiff1d(per_user["u"][per_user["ns"] >= 10], np.concatenate(test))
+    test.append(rng.choice(pool, min(SERIES_USERS, len(pool)), replace=False))
+    print("series-rich eligible", len(pool), "taken", len(test[-1]))
+    test = np.unique(np.concatenate(test))
 
 con.execute("create table test as select unnest($1) u", [test.tolist()])
 cands = con.execute(f"""
     select t, any_value(s) s, count(*) n from likes join test using (u)
     where t in (select t from '{W}/plot.parquet') group by t having count(*) >= 2""").fetchnumpy()
-new = np.concatenate([
+new = np.load(REUSE)["new"] if REUSE else np.concatenate([
     rng.choice(cands["t"][cands["s"] == 1], min(NEW_SERIES, (cands["s"] == 1).sum()), replace=False),
     rng.choice(cands["t"][cands["s"] == 0], min(NEW_FILMS, (cands["s"] == 0).sum()), replace=False)])
 print("test people", len(test), "new titles", len(new))
