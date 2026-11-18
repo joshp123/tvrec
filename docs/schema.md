@@ -41,8 +41,9 @@ con.execute("install sqlite; load sqlite; attach 'data/soup.sqlite' as soup (typ
 - `source_item(item_key, source, item_id, title, year, kind, tconst,
   match_method, n_ratings)`: each data set's own items and how each was
   matched. `match_method` is `imdb_id` (the source gives it), `title+people`,
-  `people`, `title+person`, `title+year`, `title`, with `(any year)` when the
-  source's year was ignored; null when unmatched. Several items can share a
+  `people`, `title+person`, `title+year`, `title`, with ` (year within 3)` when
+  a second pass allowed three years' difference from the source's year
+  (title matches only); null when unmatched. Several items can share a
   `tconst` (Amazon's DVD and streaming editions, Netflix's season discs).
 - `watch(user_key, tconst, plays, last_ts)`: Trakt users' watched films and
   shows (implicit feedback, up to each user's latest 100 of each).
