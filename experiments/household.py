@@ -189,6 +189,8 @@ def load(person, ti=None):
             p.known.add(t)
             if r.get("verdict") == "disliked" and r.get("person", person) == person:
                 p.add(t, -1.0, "said: disliked")
+                if r.get("note"):
+                    p.words[t] = r["note"]
     library = [json.loads(l) for l in open(PRIVATE / "plex_library.jsonl")]
     eras = library_eras(library, resolve)
     in_library = set()

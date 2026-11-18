@@ -32,7 +32,7 @@ MAP_CLUSTERS, EXAMPLES, NEARBY, DECK = 15, 6, 4, 40
 KIND_NAME = {"new": "New and good", "decent": "Decent", "niche": "Weird niche"}
 JUNK = re.compile(r"miscellan|leftover|filler|assorted|grab-bag|oddments|catalogue|low-rated|scattered", re.I)
 CORNERS = PRIVATE / "shelf_names.json"
-PROMPT_VERSION = 2  # change when the card prompt changes, so cached text is rewritten
+PROMPT_VERSION = 3  # change when the card prompt changes, so cached text is rewritten
 
 
 def name_corners(person, corners):
@@ -105,8 +105,9 @@ def write_text(person, summary, items):
             "titles it links to and how (made by the same people, loved by the same audience, the cluster it "
             "sits in), and what is different about it if it is a stretch. Say a number only if it is a count "
             "of people from the evidence and it helps.\n"
-            "\"why_not\": one sentence on the strongest thing against it, from the 'against' evidence; empty "
-            "if there is nothing.\n"
+            "\"why_not\": one sentence on what about the show itself might put this viewer off: its tone, pace, "
+            "subject, length or how it ends, in the light of their own words. Not rating or vote counts. "
+            "Empty if there is nothing.\n"
             "State no fact about the title or its people that is not in the facts given (the premise, the "
             "evidence, the makers and cast with what they are known from); do not add facts from memory.\n\n"
             "Reply with only a JSON list of objects with keys imdb_id, what, why, why_not.\n\n"
@@ -232,7 +233,8 @@ def main(person, other_name=None, given=None, shown=()):
     dislikes = [u for u, (w, _) in p.evidence.items() if w < 0 and u in F.pos]
     items, built = [], []
     for t, kind, stretch in chosen:
-        c = int(cl.get(t, -1))
+        # Model picks are not placed by the map, so no map cluster is named for them.
+        c = -1 if meta.get(t, {}).get("source") == "model" else int(cl.get(t, -1))
         rel = (f"stretch: next to their cluster '{cname(stretch_from[t])}'" if stretch else
                f"in their cluster '{cname(c)}'" if c >= 0 and own[c] > 0 else f"on the map in '{cname(c)}'" if c >= 0 else "")
         worst = None

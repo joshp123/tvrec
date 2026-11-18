@@ -1,7 +1,6 @@
-"""One drop of picks for a person: mostly the model picker's (picker.py), with
-one of the ranker's best (picks.py) in each kind, so their answers show which
-source earns its place. Each card carries its source in the data, not on the
-card. Nothing they have seen, answered or been shown before; every pick shown
+"""One drop of picks for a person from the model picker (picker.py). Each card
+carries its source in the data, not on the card (RANKER can give slots to the
+old ranker again, for a comparison). Nothing they have seen, answered or been shown before; every pick shown
 is recorded in private/shown.jsonl.
 
 Usage: python drop.py PERSON [OTHER_PERSON]"""
@@ -14,8 +13,8 @@ import household
 import picker
 import picks as P
 
-MODEL = {"new": 3, "decent": 2, "niche": 2}
-RANKER = {"new": 1, "decent": 1, "niche": 1}
+MODEL = {"new": 4, "decent": 3, "niche": 3}
+RANKER = {}  # the old ranker's slots earned nothing in the last drop
 MIN_RATING = 6.8
 
 

@@ -27,7 +27,7 @@ from core import W
 PRIVATE = household.PRIVATE
 SHOWN = PRIVATE / "shown.jsonl"
 PROPOSE = 40
-RECENT = 120
+RECENT = 45
 KINDS = {"new": "new and good: out since 2024, or a series still running with a recent season",
          "decent": "decent: widely watched and well made, but not a streaming-homepage staple",
          "niche": "weird niche: little known, strange, cult"}
@@ -81,23 +81,37 @@ _RECENT = None
 
 
 def recent_all(ti):
-    """Recent releases with facts, built once (DuckDB connections are not shared across threads)."""
+    """Recent releases with facts and makers, built once (DuckDB connections
+    are not shared across threads)."""
     global _RECENT
     if _RECENT is None:
         pm = duckdb.sql(f"select t, country, network, last_aired from '{W}/plex_meta.parquet'").df().drop_duplicates("t").set_index("t")
-        r = ti[(ti.imdb_votes >= 1000) & (ti.imdb_rating >= 7.0)].join(pm)
+        rt = duckdb.sql(f"select t, score from '{W}/plex_scores.parquet' where scorer = 'rt_critics'").df().drop_duplicates("t").set_index("t")
+        r = ti[(ti.imdb_votes >= 1000) & (ti.imdb_rating >= 7.0)].join(pm).join(rt)
         new = (r.start_year >= 2024) | ((r.is_series == 1) & (r.last_aired.fillna("") >= "2025-06"))
-        r = r[new].sort_values("imdb_votes", ascending=False)
+        r = r[new]
+        mk = duckdb.sql(f"select t, nconst, w from '{W}/makers.parquet' where share >= 0.5").df()
         plots = content.display_plots(220)
-        _RECENT = [(t, f"- {x.title} ({int(x.start_year)}, {'series' if x.is_series else 'film'}, {x.country or '?'}"
-                       f"{', ' + x.network if isinstance(x.network, str) and x.network else ''}; IMDb {x.imdb_rating}): "
-                       f"{plots.get(t, '')}") for t, x in r.iterrows()]
+        r["line"] = [f"- {x.title} ({int(x.start_year)}, {'series' if x.is_series else 'film'}, {x.country or '?'}"
+                     f"{', ' + x.network if isinstance(x.network, str) and x.network else ''}; IMDb {x.imdb_rating}): "
+                     f"{plots.get(t, '')}" for t, x in r.iterrows()]
+        _RECENT = (r, mk[mk.t.isin(r.index) | mk.nconst.isin(mk[mk.t.isin(r.index)].nconst)])
     return _RECENT
 
 
 def recent_shortlist(p, ti, exclude):
-    """Recent releases the model may not know, with their facts, from the soup."""
-    return [line for t, line in recent_all(ti) if t not in exclude][:RECENT]
+    """A short, varied list of recent releases the model may not know: those
+    made by people who made titles the person rated well, then those critics
+    rate highly among the little seen (first released since 2024). Talk,
+    game, reality and news shows are left out."""
+    r, mk = recent_all(ti)
+    r = r[~r.index.isin(exclude) & ~r.genres.fillna("").str.contains("Talk-Show|Game-Show|Reality-TV|News")]
+    liked = {t for t, (w, why) in p.evidence.items() if w > 0 and why.startswith("said")}
+    makers = set(mk[mk.t.isin(liked)].nconst)
+    by_maker = r[r.index.isin(mk[mk.nconst.isin(makers)].t)].sort_values("imdb_rating", ascending=False)
+    fresh = r[(r.start_year >= 2024) & ~r.index.isin(by_maker.index)]
+    little = fresh[(fresh.imdb_votes < 30000) & (fresh.score >= 8.5)].sort_values(["score", "imdb_votes"], ascending=False)
+    return list(by_maker.line[:RECENT // 3]) + list(little.line[:RECENT - min(len(by_maker), RECENT // 3)])
 
 
 def propose(p, ti, hide=(), n=PROPOSE):
