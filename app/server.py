@@ -18,7 +18,7 @@ HERE = Path(__file__).resolve().parent
 PRIVATE = Path(os.environ.get("TVREC_PRIVATE", HERE.parent / "private"))
 CARDS = PRIVATE / "cards"
 SWIPES = PRIVATE / "swipes.jsonl"
-ANSWERS = {"want", "not_for_me", "seen_loved", "seen_fine", "seen_disliked", "dont_know"}
+ANSWERS = {"want", "not_for_me", "slop", "not_now", "seen_loved", "seen_fine", "seen_disliked", "dont_know"}
 lock = threading.Lock()
 
 

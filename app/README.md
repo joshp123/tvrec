@@ -43,11 +43,15 @@ One answer per line:
 {"person": "...", "imdb_id": "tt...", "answer": "want", "note": "...", "ts": "2026-11-18T09:53:02+0100"}
 ```
 
-`answer` is one of `want`, `not_for_me`, `seen_loved`, `seen_fine`,
-`seen_disliked`, `dont_know`. `note` is present only when one was written. A
+`answer` is one of `want`, `not_for_me`, `slop`, `not_now`, `seen_loved`,
+`seen_fine`, `seen_disliked`, `dont_know`. The three kinds of no: `slop` is a
+judgement against the title and titles like it; `not_now` says nothing
+against it, and it may come back later; `not_for_me` is a no with no reason
+given. `note` is present only when one was written. A
 later line for the same person and title replaces an earlier one. In the
 "have you seen this?" deck, "Not seen" is written as `dont_know`.
 
 An answer is sent eight seconds after it is given, or sooner when the next
 answer comes or the page is hidden; Undo within those eight seconds sends
-nothing.
+nothing. After a no, the page offers the reason (slop or not right now) for
+those same eight seconds; choosing one replaces the plain `not_for_me`.

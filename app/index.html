@@ -164,6 +164,11 @@ main { flex: 1; min-height: 0; position: relative; }
 .toast { position: absolute; left: 16px; right: 16px; top: 4px; z-index: 10; background: var(--note); border-radius: 14px; padding: 10px 14px;
   font-size: 15px; line-height: 20px; transform: translateY(-140%); transition: transform .25s; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
 .toast.on { transform: none; }
+.why { position: absolute; left: 12px; right: 12px; z-index: 11; background: var(--note); border-radius: 22px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.7); }
+.why-t { font-size: 15px; line-height: 20px; font-weight: 600; padding: 0 4px; }
+.why-b { display: flex; gap: 8px; } .why-b .pill { background: var(--surface-2); }
+.why-h { font-size: 12px; line-height: 16px; color: var(--label-2); padding: 0 4px; }
 .notesheet { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.6); display: flex; flex-direction: column; justify-content: flex-end; }
 .notesheet .panel { background: var(--surface); border-radius: 22px 22px 0 0; padding: 16px 16px max(16px, var(--bottom)); display: flex; flex-direction: column; gap: 10px; }
 .notesheet textarea { -webkit-user-select: text; user-select: text; width: 100%; min-height: 110px; resize: none; background: var(--bg); color: var(--label); border: 1px solid var(--surface-2); border-radius: 14px;
@@ -195,7 +200,7 @@ main { flex: 1; min-height: 0; position: relative; }
         <button class="pill grow tight" data-a="seen_fine">It was fine</button>
         <button class="pill grow tight" data-a="seen_disliked">Disliked</button>
       </div>
-      <div class="hint" id="hint-picks">→ want · ← not for me · picture ↑ don't know · tap: more</div>
+      <div class="hint" id="hint-picks">→ want · ← no, then why (optional) · picture ↑ don&#39;t know</div>
     </section>
 
     <section class="view" id="v-seen">
@@ -230,6 +235,15 @@ main { flex: 1; min-height: 0; position: relative; }
     </section>
 
     <div class="toast" id="toast"></div>
+    <div class="why" id="why" hidden>
+      <div class="why-t"><span id="why-title"></span><span class="sec2"> Why? Optional.</span></div>
+      <div class="why-b">
+        <button class="pill grow tight" data-why="slop">Slop</button>
+        <button class="pill grow tight" data-why="not_now">Not right now</button>
+        <button class="pill undo" data-why="undo" aria-label="Undo"></button>
+      </div>
+      <div class="why-h">Slop: bad, and shows like it are bad. Not right now: fine, maybe later. Do nothing: just no.</div>
+    </div>
   </main>
   <div class="tabs"><nav role="tablist">
     <button role="tab" data-tab="picks"><svg width="24" height="20" viewBox="0 0 24 20"><rect x="5" y="1" width="14" height="18" rx="3" fill="none" stroke-width="2"/><path d="M1.5 4v12M22.5 4v12" fill="none" stroke-width="2.5" stroke-linecap="round"/></svg>Picks</button>
@@ -255,7 +269,7 @@ main { flex: 1; min-height: 0; position: relative; }
 const UNDO = `<svg width="20" height="18" viewBox="0 0 20 18"><path d="M6 1 1.5 5.5 6 10" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 5.5h10a6 6 0 0 1 0 12H8" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 document.querySelectorAll("[data-a=undo]").forEach(b => b.innerHTML = UNDO);
 const PLAY = `<svg width="12" height="14" viewBox="0 0 12 14"><path d="M1 1.5v11l10-5.5z" fill="#FFF"/></svg>`;
-const SAID = { want: "Want", not_for_me: "Not for me", seen_loved: "Seen: loved it", seen_fine: "Seen: it was fine",
+const SAID = { want: "Want", not_for_me: "Not for me", slop: "Slop", not_now: "Not right now", seen_loved: "Seen: loved it", seen_fine: "Seen: it was fine",
   seen_disliked: "Seen: disliked", dont_know: "Don't know" };
 const SEEN_SAID = { ...SAID, dont_know: "Not seen it" };
 const SHORT = { "United States of America": "US", "United States": "US", "United Kingdom": "UK" };
@@ -287,7 +301,7 @@ const open = list => list.filter(c => !answers[person][c.imdb_id]);
 
 function commit() {
   if (!pending) return;
-  const { item, answer, who } = pending; pending = null; clearTimeout(commit.t);
+  const { item, answer, who } = pending; pending = null; clearTimeout(commit.t); $("#why").hidden = true;
   const body = { person: who, imdb_id: item.imdb_id, answer, note: notes[item.imdb_id] || "" };
   answers[who][item.imdb_id] = body;
   fetch("/api/answer", { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
@@ -299,13 +313,26 @@ function answer(item, a, said = SAID) {
   commit();
   pending = { item, answer: a, who: person };
   answers[person][item.imdb_id] = { answer: a, pending: true };
-  toast(`${item.title}: ${said[a]}`);
+  if (a === "not_for_me") askWhy(item); else toast(`${item.title}: ${said[a]}`);
   commit.t = setTimeout(commit, 8000);
   render();
 }
+function askWhy(item) {
+  const w = $("#why"), bar = $("#bar-picks");
+  $("#why-title").textContent = `No to ${item.title}.`;
+  $("[data-why=undo]").innerHTML = UNDO;
+  w.hidden = false;
+  w.style.bottom = tab === "picks" ? `${$("main").offsetHeight - bar.offsetTop + 8}px` : "12px";
+}
+$("#why").addEventListener("click", e => {
+  const r = e.target.closest("[data-why]")?.dataset.why; if (!r || !pending) return;
+  if (r === "undo") return undo();
+  const title = pending.item.title;
+  pending.answer = r; commit(); toast(`${title}: ${SAID[r]}`);
+});
 function undo() {
   if (!pending) return;
-  delete answers[pending.who][pending.item.imdb_id]; pending = null; clearTimeout(commit.t);
+  delete answers[pending.who][pending.item.imdb_id]; pending = null; clearTimeout(commit.t); $("#why").hidden = true;
   toast("Undone"); render();
 }
 function toast(text) {
