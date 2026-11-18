@@ -48,6 +48,6 @@ One answer per line:
 later line for the same person and title replaces an earlier one. In the
 "have you seen this?" deck, "Not seen" is written as `dont_know`.
 
-An answer is sent five seconds after it is given, or sooner when the next
-answer comes or the page is hidden; Undo within those five seconds sends
+An answer is sent eight seconds after it is given, or sooner when the next
+answer comes or the page is hidden; Undo within those eight seconds sends
 nothing.
