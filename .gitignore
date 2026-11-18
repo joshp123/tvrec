@@ -1,6 +1,6 @@
 # Everything under data/ and private/ stays on this machine: downloaded data
 # sets, the built database, and all household data.
-/data/
+/data
 /private/
 *.sqlite
 *.sqlite-*
