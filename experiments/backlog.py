@@ -32,7 +32,6 @@ POP_EXP = 1.0      # candidate popularity exponent in the likes score; 0.5 is pl
 OBVIOUS = 0.15     # a title liked by more than this share of a favourite's fans (of 200 or more) is one they have likely seen
 MIN_MAKER = 0.1    # weakest maker link that counts
 RATED = 20         # likers a title needs before other people's likes alone rank it
-DISLIKE_LABELS = ("slop",)
 
 
 def norm(s):
@@ -61,7 +60,7 @@ def household(person, ti):
     for r in csv.DictReader(open(PRIVATE / "watchlist.csv")):
         t = resolve(ti, r["title"], None, r["kind"])
         if t:
-            watch[t] = r["note"]
+            watch[t] = r.get("verdict", "")
         else:
             unresolved.append(r["title"])
     return rows, played, seen, watch, unresolved
@@ -79,7 +78,7 @@ def evidence(person, level, holdout=()):
     liked = {int(r["target"][2:]): (W_LOVED if r["verdict"] == "loved" else W_LIKED)
              for r in rows if r["target"].startswith("tt") and r["verdict"] != "disliked"}
     disliked = {int(r["target"][2:]) for r in rows if r["target"].startswith("tt") and r["verdict"] == "disliked"}
-    disliked |= {t for t, note in watch.items() if any(x in note for x in DISLIKE_LABELS)}
+    disliked |= {t for t, verdict in watch.items() if verdict == "disliked"}
     loved_makers = {r["target"]: (W_LOVED if r["verdict"] == "loved" else W_LIKED)
                     for r in rows if r["target"].startswith("nm") and r["verdict"] != "disliked"}
     for t in holdout:
