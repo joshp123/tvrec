@@ -9,7 +9,7 @@ links to the titles most like it by the best evidence it has:
 - by content, for every title: its 10 closest titles by shared makers plus
   plot words, scaled so a typical content link weighs the same as a typical
   likes link, and a quarter of that for titles with 30 or more likers (at full
-  weight, shared words such as "metal" pulled a comedy about metal detecting among heavy-metal
+  weight, shared words such as "metal" pulled an unrelated comedy among heavy-metal
   documentaries). Likes alone grouped titles by data set and era (a 2000s DVD
   catalogue, one streaming service's hits); content keeps each cluster one
   kind of thing.
