@@ -139,7 +139,7 @@ def evidence(person, level, holdout=()):
             why["makers"][t] = (m.nconst, f"made by {names.get(m.nconst)}, whose work you rated")
 
     # Level 2: plot embedding closest to a favourite.
-    if level >= 2:
+    if level == 2:  # level 3 builds on level 1, which beat level 2 in the tests
         emb = content.Embeddings()
         fav = [t for t in liked if t in emb.pos]
         S = emb.sims(fav) * np.array([liked[t] for t in fav])[None, :]

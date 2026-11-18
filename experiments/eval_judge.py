@@ -52,7 +52,7 @@ def ask(seeds, cands):
 
 def new_cases():
     import eval_new as E
-    sig_name = "level 2: level 1 + embedding" if E.emb_S is not None else "level 1: makers + words"
+    sig_name = "level 1: makers + words"
     out = []
     for u, liked_new, seeds in E.people():
         sig = E.signals(seeds)[sig_name]
