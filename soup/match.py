@@ -71,11 +71,13 @@ def _run(con, years):
         select distinct item_id, norm_name(n) as key
         from (select item_id, unnest(people) as n from _item where len(people) > 0)
         where norm_name(n) is not null)
-    select n.item_id, c.tconst, count(distinct n.key) as hits, any_value(nn.n_names) as n_names
-    from names n
-    join (select item_id, count(*) as n_names from names group by 1) nn using (item_id)
-    join _person_key p using (key)
-    join credit c on c.nconst = p.nconst and c.role in {PEOPLE_ROLES}
+    , hits as (
+        select distinct n.item_id, c.tconst, n.key
+        from names n
+        join _person_key p using (key)
+        join credit c on c.nconst = p.nconst and c.role in {PEOPLE_ROLES})
+    select h.item_id, h.tconst, count(*) as hits, any_value(nn.n_names) as n_names
+    from hits h join (select item_id, count(*) as n_names from names group by 1) nn using (item_id)
     group by all
     """)
 

@@ -84,29 +84,43 @@ def letterboxd(con):
     f = RAW / "letterboxd" / "train.parquet"
     # The data set gives only Letterboxd's URL slug, which is the title
     # lower-cased and hyphenated, with "-YYYY" added when the title is taken.
+    # A slug ending in a year has two readings: a disambiguating suffix
+    # ("man-up-2019": "man up", 2019), tried first with the year required, or
+    # part of the title ("blade-runner-2049"), tried for items still unmatched.
     con.execute(f"""
-    create or replace table _item as
-    with s as (select distinct movie_id::varchar as item_id, title as slug from '{f}')
-    select item_id, replace(slug, '-', ' ') as title, null::int as year, 'film' as kind, []::varchar[] as people from s
-    union all
-    select item_id, regexp_replace(replace(slug, '-', ' '), ' \\d{{4}}$', ''),
-           try_cast(regexp_extract(slug, '-(\\d{{4}})$', 1) as int), 'film', []::varchar[]
-    from s where regexp_matches(slug, '-(19|20)\\d\\d$')
+    create or replace table _lb_slug as
+    select distinct movie_id::varchar as item_id, title as slug,
+           try_cast(regexp_extract(title, '-((19|20)\\d\\d)$', 1) as int) as suffix_year
+    from '{f}'
     """)
     con.execute(f"""
     create or replace table _r as
     select "user" as user, movie_id::varchar as item_id, rating, null::bigint as ts from '{f}'
     """)
-    # Two readings of a slug ending in a year: a disambiguating suffix (tried
-    # first, year required) or part of the title ("blade-runner-2049").
-    con.execute("create or replace table _lb_item as select * from _item")
-    con.execute("create or replace table _item as select * from _lb_item qualify row_number() over (partition by item_id order by year nulls last) = 1")
+    con.execute("""
+    create or replace table _item as
+    select item_id,
+           replace(case when suffix_year is null then slug else regexp_replace(slug, '-\\d{4}$', '') end, '-', ' ') as title,
+           suffix_year as year, 'film' as kind, []::varchar[] as people
+    from _lb_slug
+    """)
     match.run(con)
-    con.execute("create or replace table _lb_match as select * from _match")
-    con.execute("create or replace table _item as select * from _lb_item where year is null and item_id not in (select item_id from _lb_match)")
+    con.execute("create or replace table _lb_item1 as select * from _item")
+    con.execute("create or replace table _lb_match1 as select * from _match")
+    con.execute("""
+    create or replace table _item as
+    select item_id, replace(slug, '-', ' ') as title, null::int as year, 'film' as kind, []::varchar[] as people
+    from _lb_slug
+    where suffix_year is not null and item_id not in (select item_id from _lb_match1)
+    """)
     match.run(con)
-    con.execute("create or replace table _match as select * from _lb_match union all select * from _match")
-    con.execute("create or replace table _item as select * from _lb_item qualify row_number() over (partition by item_id order by year nulls last) = 1")
+    con.execute("""
+    create or replace table _item as
+    select * from _lb_item1 where item_id not in (select item_id from _match)
+    union all
+    select * from _item where item_id in (select item_id from _match)
+    """)
+    con.execute("create or replace table _match as select * from _lb_match1 union all select * from _match")
     add(con, "letterboxd")
 
 
@@ -251,7 +265,7 @@ def trakt(con):
     """)
     con.execute("""
     create or replace table _item as
-    select tconst as item_id, any_value(title) as title, any_value(year) as year,
+    select tconst as item_id, min(title) as title, min(year) as year,
            null::varchar as kind, []::varchar[] as people, tconst
     from _tr group by tconst
     """)

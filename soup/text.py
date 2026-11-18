@@ -67,7 +67,7 @@ def wikipedia(con):
         return
     con.execute(f"""
     create or replace table _wiki_plot as
-    select l.tconst, 'wikipedia' as source, any_value(w.text) as text
+    select l.tconst, 'wikipedia' as source, min(w.text) as text
     from read_json('{WIKIPEDIA}', format='newline_delimited', ignore_errors=true, columns={{'enwiki':'varchar','text':'varchar'}}) w
     join title_link l on url_decode(l.enwiki) = w.enwiki
     where nullif(trim(w.text), '') is not null
