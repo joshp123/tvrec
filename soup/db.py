@@ -31,12 +31,14 @@ create or replace macro norm_name(s) as nullif(trim(regexp_replace(
 """
 
 
+# The build shares a 24 GB laptop with other jobs: DuckDB spills to
+# data/work/tmp past its memory limit, so a low limit costs time, not results.
 def connect() -> duckdb.DuckDBPyConnection:
     WORK.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(WORK / "build.duckdb"))
     con.execute(f"""
-        set memory_limit = '10GB';
-        set threads = 10;
+        set memory_limit = '3GB';
+        set threads = 4;
         set temp_directory = '{WORK / "tmp"}';
         set enable_progress_bar = false;
         set preserve_insertion_order = false;

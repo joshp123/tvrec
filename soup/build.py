@@ -68,6 +68,7 @@ def export(con):
             con.execute(f"create table soup.{t} as select * from {t}")
     con.execute("detach soup")
     db = sqlite3.connect(tmp)
+    db.execute("pragma cache_size = -262144")  # 256 MB for building indexes
     for t, idx in TABLES.items():
         if t in have:
             for sql in idx:
