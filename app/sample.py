@@ -108,7 +108,8 @@ def main(person):
             continue
         card = facts(db, meta, t)
         card.update(pick_kind=lane, why=why + ".", links=links, in_library=t in lib_ids,
-                    cluster=next((cluster_of[l] for l in links if l in cluster_of), None))
+                    cluster=None if "people who rated" in why else
+                    next((cluster_of[l] for l in links if l in cluster_of), None))
         cards.append(card)
 
     clusters = []
