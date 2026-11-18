@@ -24,5 +24,6 @@ uv run python -m soup.fetch_household   # needs private/plex.env
 uv run python -m soup.build         # again, to load the fetched text
 ```
 
-The build reads only `data/raw/` and `private/`, takes about ten minutes and
-peaks at about 6 GB of memory. The result is about 16 GB.
+The build reads only `data/raw/` and `private/`, takes about 25 minutes and
+peaks at about 3.7 GB of memory (DuckDB is capped at 3 GB and spills the
+rest to `data/work/`). The result is about 16 GB.
